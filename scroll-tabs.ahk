@@ -130,92 +130,92 @@ LogError( level, message ) {
 
 ;; DEBUG
 ;; =============================================
-class DebugGUI {
-  __New() {
-    this.gui := Gui( "+Resize +MinSize380x220 -MaximizeBox" )
-    this.gui.Title := "Debug"
-    this.gui.BackColor := "1C1C1C"
-    this.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
-    SetDarkMode( this.gui.Hwnd )
 
-    this.layout := { startX: 20, startY: 10, lineSpacing: 25, widthLabel: 290, widthValue: 200 }
+InitDebugGUI() {
+  MyGui := Gui( "+Resize +MinSize380x220 -MaximizeBox" )
+  MyGui.Title := "Debug"
+  MyGui.BackColor := "1C1C1C"
+  MyGui.SetFont( "s14 q5 cffffff", "Segoe UI" )  ; White text color
+  SetDarkMode( MyGui.Hwnd )
 
-    this.fields := [
-      { Key: "ahkVersion", Label: "AHK Version:" },
-      { Key: "ENABLE_WINDOW_RETURN", Label: "ENABLE_WINDOW_RETURN:" },
-      { Key: "mouseX", Label: "mouseX:" },
-      { Key: "mouseY", Label: "mouseY:" },
-      { Key: "relativeY", Label: "relativeY:" },
-      { Key: "mouseWindowId", Label: "mouseWindowId:" },
-      { Key: "processName", Label: "processName:" },
-      { Key: "ProcessInALLOWED_PROGRAMS", Label: "processInALLOWED_PROGRAMS:" },
-    ]
+  MyGui.layout := { startX: 20, startY: 10, lineSpacing: 25, widthLabel: 290, widthValue: 200 }
 
-    this.guiFields := Map()
-    this.CreateGUIElements()
-    this.gui.OnEvent( "Size", this.OnResize.Bind( this ) )
+  MyGui.fields := [
+    { Key: "ahkVersion", Label: "AHK Version:" },
+    { Key: "ENABLE_WINDOW_RETURN", Label: "ENABLE_WINDOW_RETURN:" },
+    { Key: "mouseX", Label: "mouseX:" },
+    { Key: "mouseY", Label: "mouseY:" },
+    { Key: "relativeY", Label: "relativeY:" },
+    { Key: "mouseWindowId", Label: "mouseWindowId:" },
+    { Key: "processName", Label: "processName:" },
+    { Key: "ProcessInALLOWED_PROGRAMS", Label: "processInALLOWED_PROGRAMS:" },
+  ]
 
-    ; ✅ Store a bound function reference to ensure SetTimer resets correctly
-    this.reloadGuiBound := this.ReloadGUI.Bind( this )
-  }
+  MyGui.guiFields := Map()
+  CreateGUIElements( MyGui )
 
-  CreateGUIElements() {
-    for each, field in this.fields {
-      yPos := this.layout.startY + this.layout.lineSpacing * ( A_Index - 1 )
-      this.gui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", this.layout.startX, yPos, this.layout.widthLabel ), field.Label )
+  MyGui.OnEvent( "Size", OnResize.Bind( MyGui ) )
 
-      this.guiFields[ field.Key ] := this.gui.Add(
-        ( field.Key = "processName" ) ? "Edit" : "Text",
-        Format( "x{} y{} w{} {} Right",
-          this.layout.startX + this.layout.widthLabel + 10, yPos, this.layout.widthValue,
-          ( field.Key = "processName" ) ? "+ReadOnly -E0x200" : "BackgroundTrans"
-        )
+  MyGui.reloadGuiBound := ReloadGUI.Bind( MyGui )
+
+  return MyGui  ; Return the MyGui object so we can store it
+}
+
+CreateGUIElements( MyGui ) {
+  for each, field in MyGui.fields {
+    yPos := MyGui.layout.startY + MyGui.layout.lineSpacing * ( A_Index - 1 )
+    MyGui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", MyGui.layout.startX, yPos, MyGui.layout.widthLabel ), field.Label )
+
+    MyGui.guiFields[ field.Key ] := MyGui.Add(
+      ( field.Key = "processName" ) ? "Edit" : "Text",
+      Format( "x{} y{} w{} {} Right",
+        MyGui.layout.startX + MyGui.layout.widthLabel + 10, yPos, MyGui.layout.widthValue,
+        ( field.Key = "processName" ) ? "+ReadOnly -E0x200" : "BackgroundTrans"
       )
+    )
 
-      if ( field.Key = "processName" ) {
-        this.guiFields[ field.Key ].Opt( "+Background" this.gui.BackColor )
-      }
+    if ( field.Key = "processName" ) {
+      MyGui.guiFields[ field.Key ].Opt( "+Background" MyGui.BackColor )
     }
   }
+}
 
-  OnResize( GuiObj, MinMax, Width, Height ) {
-    if ( MinMax = -1 || MinMax = 1 ) {
-      return ; Ignore minimize/maximize
-    }
-
-    for each, field in this.fields {
-      this.guiFields[ field.Key ].Move( Width - this.layout.widthValue - 20, this.layout.startY + this.layout.lineSpacing * ( A_Index - 1 ) )
-    }
-
-    ; ✅ Reset the timer correctly by using the stored bound function reference
-    SetTimer( this.reloadGuiBound, -500 )  ; If called again, it resets to 500ms
+OnResize( MyGui, GuiObj, MinMax, Width, Height ) {
+  if ( MinMax = -1 || MinMax = 1 ) {
+    return ; Ignore minimize/maximize
   }
 
-  UpdateDebugGUI() {
-    MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-    local processName := WinGetProcessName( mouseWindowId )
-    GetRelativeMouseY( &relativeY )
-
-    this.guiFields[ "ahkVersion" ].Text := A_AhkVersion
-    this.guiFields[ "ENABLE_WINDOW_RETURN" ].Text := ENABLE_WINDOW_RETURN ? "true" : "false"
-    this.guiFields[ "mouseX" ].Text := mouseX
-    this.guiFields[ "mouseY" ].Text := mouseY
-    this.guiFields[ "relativeY" ].Text := relativeY
-    this.guiFields[ "mouseWindowId" ].Text := mouseWindowId
-    this.guiFields[ "processName" ].Text := processName
-    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Text := ProcessInALLOWED_PROGRAMS( processName ) ? "true" : "false"
-
-    this.guiFields[ "processName" ].SetFont( "Bold" )
-
-    this.gui.Show( Format( "x{} y{} w380 h220", mouseX - 190, mouseY ) )
-    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
+  for each, field in MyGui.fields {
+    MyGui.guiFields[ field.Key ].Move( Width - MyGui.layout.widthValue - 20, MyGui.layout.startY + MyGui.layout.lineSpacing * ( A_Index - 1 ) )
   }
 
-  ReloadGUI() {
-    this.gui.Hide()
-    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
-    this.gui.Show()
-  }
+  SetTimer( MyGui.reloadGuiBound, -500 )  ; Reset the timer
+}
+
+UpdateDebugGUI( MyGui ) {
+  MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
+  local processName := WinGetProcessName( mouseWindowId )
+  GetRelativeMouseY( &relativeY )
+
+  MyGui.guiFields[ "ahkVersion" ].Text := A_AhkVersion
+  MyGui.guiFields[ "ENABLE_WINDOW_RETURN" ].Text := ENABLE_WINDOW_RETURN ? "true" : "false"
+  MyGui.guiFields[ "mouseX" ].Text := mouseX
+  MyGui.guiFields[ "mouseY" ].Text := mouseY
+  MyGui.guiFields[ "relativeY" ].Text := relativeY
+  MyGui.guiFields[ "mouseWindowId" ].Text := mouseWindowId
+  MyGui.guiFields[ "processName" ].Text := processName
+  MyGui.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Text := ProcessInALLOWED_PROGRAMS( processName ) ? "true" : "false"
+
+  MyGui.guiFields[ "processName" ].SetFont( "Bold" )
+
+  MyGui.Show( Format( "x{} y{} w380 h220", mouseX - 190, mouseY ) )
+  MyGui.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
+}
+
+ReloadGUI( MyGui ) {
+  MyGui.Hide()
+  MyGui.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
+  MyGui.Show()
 }
 
 SetDarkMode( hwnd ) {
@@ -227,9 +227,9 @@ SetDarkMode( hwnd ) {
 }
 
 if ( DEBUG ) {
-  DebugInstance := DebugGUI()
+  DebugGUI := InitDebugGUI()
   $F12:: {
-    DebugInstance.UpdateDebugGUI()
+    UpdateDebugGUI( DebugGUI )
   }
 }
 
