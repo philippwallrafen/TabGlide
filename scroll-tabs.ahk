@@ -1,47 +1,68 @@
-;; Scroll wheel tab-switching ~e4zyphil
-#Requires AutoHotkey v2
+;; =============================================
+;; scroll-wheel-tab-switching ~e4zyphil
+;; scroll-tabs.ahk
+;; =============================================
 
+;; CONFIG
+;; =============================================
 ; Add all suitable programs here :) I tried sorting them alphabetically
-global allowedPrograms := Array( "brave.exe", "chrome.exe", "explorer.exe", "msedge.exe", )
-global ReturnToOriginalWindow := true
-global NeedReturn := false
+global ALLOWED_PROGRAMS := [
+  "brave.exe",
+  "Code.exe",
+  "chrome.exe",
+  "chromium.exe",
+  "explorer.exe",
+  "firefox.exe",
+  "opera.exe",
+  "opera_gx.exe",
+  "msedge.exe",
+  "WindowsTerminal.exe",
+]
+; If the active window should be returned after scrolling to change tab in inactive window
+global ENABLE_WINDOW_RETURN := false
+global DEBUG := true
 
+;; GENERAL & GLOBALS
+;; =============================================
+#Requires AutoHotkey v2
+global NeedReturn := false
 CoordMode( "Mouse", "Screen" )
-; Helper functions
-GetMouseInfo( &mouseX, &mouseY, &mouseWindowId ) {
-  MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-}
-ProcessIsInAllowedPrograms( processToFind ) {
-  global allowedPrograms
-  for program in allowedPrograms {
-    if ( StrLower( program ) = StrLower( processToFind ) ) {
+
+;; HELPER FUNCTIONS
+;; =============================================
+ProcessInALLOWED_PROGRAMS( processToFind ) {
+  global ALLOWED_PROGRAMS
+  for program in ALLOWED_PROGRAMS {
+    if ( StrLower( processToFind ) = StrLower( program ) ) {
       return true
     }
   }
   return false
 }
 GetRelativeMouseY( &relativeY ) {
-  GetMouseInfo( &mouseX, &mouseY, &mouseWindowId )
-  ; Hole den Monitor-Handle für den aktuellen Punkt (MONITOR_DEFAULTTONEAREST = 2)
-  local hMon := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" )
+  MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
+  ; Retrieve the monitor handle for the current mouse position (MONITOR_DEFAULTTONEAREST = 2)
+  local monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" )
 
-  ; Erstelle einen Puffer für die MONITORINFO-Struktur (40 Byte)
-  monitorInfo := Buffer( 40, 0 )
-  ; Setze die Größe der Struktur (dwSize = 40)
-  NumPut( "UInt", 40, monitorInfo, 0 )  ; Setze dwSize = 40
+  ; Allocate a buffer for the MONITORINFO structure (40 bytes)
+  local monitorInfo := Buffer( 40, 0 )
+  ; Set the structure size (dwSize = 40)
+  NumPut( "UInt", 40, monitorInfo, 0 )
 
-  ; Rufe GetMonitorInfo auf, um die Monitorinformationen zu erhalten
-  local getMonInfoResult := DllCall( "GetMonitorInfo", "Ptr", hMon, "Ptr", monitorInfo )
+  ; Retrieve monitorInfo
+  if !DllCall( "GetMonitorInfo", "Ptr", monitorHandle, "Ptr", monitorInfo ) {
+    LogError( "error", "GetMonitorInfo failed for handle " monitorHandle )
+    return false
+  }
 
   ; Die MONITORINFO-Struktur ist folgendermaßen aufgebaut:
   ; dwSize (4 Byte) an Offset 0,
   ; rcMonitor (RECT) ab Offset 4: left (4), top (8), right (12), bottom (16)
 
-  ; local monitorLeft   := NumGet(monitorInfo, 4, "Int")
+  ;;; local monitorLeft   := NumGet(monitorInfo, 4, "Int")
   local monitorTop := NumGet( monitorInfo, 8, "Int" )
-  ; local monitorRight  := NumGet(monitorInfo, 12, "Int")
-  ; local monitorBottom := NumGet(monitorInfo, 16, "Int")
-
+  ;;; local monitorRight  := NumGet(monitorInfo, 12, "Int")
+  ;;; local monitorBottom := NumGet(monitorInfo, 16, "Int")
   return relativeY := mouseY - monitorTop
 }
 IsMouseOverActiveWindow( mouseWindowId, previousActiveWindow ) {
@@ -52,115 +73,164 @@ ActivateWindow( windowId ) {
     WinActivate( windowId )
   }
 }
-TrackScrollActivity( ) {
-  ; static lastScrollTime := 0  ; Speichert den letzten Scroll-Zeitpunkt
-  global lastScrollTime  ; Scroll-Zeit aktualisieren
-  lastScrollTime := A_TickCount  ; Scroll-Zeit aktualisieren
+TrackScrollActivity() {
+  global lastScrollTime
+  lastScrollTime := A_TickCount
   MsgBox( lastScrollTime )
   SetTimer( CheckScrollInactivity, -2000 )  ; Timer startet EINMALIG nach 2 Sekunden
 }
-CheckScrollInactivity( ) {
-  ; static lastScrollTime := 0  ; Speichert den Zeitpunkt des letzten Scrollens
+CheckScrollInactivity() {
   global lastScrollTime, previousActiveWindow, NeedReturn
 
   if ( A_TickCount - lastScrollTime > 2000 ) {  ; 2000 ms = 2 Sekunden
-    MsgBox( "Kein Scrollen für 2 Sekunden!" )  ; Nachricht anzeigen
+    MsgBox( "Kein Scrollen für 2 Sekunden!" )
     ActivateWindow( previousActiveWindow )
     NeedReturn := false
     SetTimer( CheckScrollInactivity, 0 )  ; Timer stoppen
   }
 }
+LogError( level, message ) {
+  formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
+  formattedLevel := "[" StrUpper( level ) "] "
+  FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\error.log" )
+}
 
+;; MAIN
+;; =============================================
 ~$WheelDown::
 ~$WheelUp::
 {
-  GetMouseInfo( &mouseX, &mouseY, &mouseWindowId )
+  global ENABLE_WINDOW_RETURN, previousActiveWindow, NeedReturn
+  MouseGetPos(, , &mouseWindowId )
   local processName := WinGetProcessName( mouseWindowId )
-  if ( !ProcessIsInAllowedPrograms( processName ) ) {
+  if ( !ProcessInALLOWED_PROGRAMS( processName ) ) {
     return
   }
   GetRelativeMouseY( &relativeY )
   if ( relativeY > 50 ) {
     return
   }
-  ; global previousActiveWindow
   if !( NeedReturn ) {
-    global previousActiveWindow := WinGetID( "A" )
+    previousActiveWindow := WinGetID( "A" )
   }
   if ( !IsMouseOverActiveWindow( mouseWindowId, previousActiveWindow ) ) {
     ActivateWindow( mouseWindowId )
-    global ReturnToOriginalWindow
-    global NeedReturn := true
+    NeedReturn := true
   }
-  ; }
   if ( A_ThisHotkey = "~$WheelDown" ) {
     Send( "^{Tab}" )
   } else {
     Send( "^+{Tab}" )
   }
   ; (optional) Return to original window
-  ; if ( ReturnToOriginalWindow && mouseWindowId != previousActiveWindow ) {
-  if ( ReturnToOriginalWindow && NeedReturn ) {
-    TrackScrollActivity( )
-    ; MsgBox( "going back" )
-    ; Sleep 5
-    ; ActivateWindow( previousActiveWindow )
+  if ( ENABLE_WINDOW_RETURN && NeedReturn ) {
+    TrackScrollActivity()
   }
 }
 
-$F12:: ; debug Key to show processName
-{
-  GetMouseInfo( &mouseX, &mouseY, &mouseWindowId )
-  local processName := WinGetProcessName( mouseWindowId )
-  GetRelativeMouseY( &relativeY )
+;; DEBUG
+;; =============================================
+class DebugGUI {
+  __New() {
+    this.gui := Gui( "+Resize +MinSize380x220 -MaximizeBox" )
+    this.gui.Title := "Debug"
+    this.gui.BackColor := "1C1C1C"
+    this.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
+    SetDarkMode( this.gui.Hwnd )
 
-  ; ✅ Update GUI values dynamically
-  guiFields[ "AhkVersion" ].Text := A_AhkVersion
-  guiFields[ "MouseX" ].Text := mouseX
-  guiFields[ "MouseY" ].Text := mouseY
-  guiFields[ "RelativeY" ].Text := relativeY
-  guiFields[ "mouseWindowId" ].Text := mouseWindowId
-  guiFields[ "ProcessName" ].Text := processName
-  guiFields[ "ProcessIsInAllowedPrograms" ].Text := ProcessIsInAllowedPrograms( processName ) ? "true" : "false"
+    this.layout := { startX: 20, startY: 10, lineSpacing: 25, widthLabel: 290, widthValue: 200 }
 
-  guiFields[ "ProcessName" ].SetFont( "Bold" )
+    this.fields := [
+      { Key: "ahkVersion", Label: "AHK Version:" },
+      { Key: "ENABLE_WINDOW_RETURN", Label: "ENABLE_WINDOW_RETURN:" },
+      { Key: "mouseX", Label: "mouseX:" },
+      { Key: "mouseY", Label: "mouseY:" },
+      { Key: "relativeY", Label: "relativeY:" },
+      { Key: "mouseWindowId", Label: "mouseWindowId:" },
+      { Key: "processName", Label: "processName:" },
+      { Key: "ProcessInALLOWED_PROGRAMS", Label: "processInALLOWED_PROGRAMS:" },
+    ]
 
-  MyGui.Show( Format( "x{} y{}", mouseX - 170, mouseY ) )
+    this.guiFields := Map()
+    this.CreateGUIElements()
+    this.gui.OnEvent( "Size", this.OnResize.Bind( this ) )
+
+    ; ✅ Store a bound function reference to ensure SetTimer resets correctly
+    this.reloadGuiBound := this.ReloadGUI.Bind( this )
+  }
+
+  CreateGUIElements() {
+    for each, field in this.fields {
+      yPos := this.layout.startY + this.layout.lineSpacing * ( A_Index - 1 )
+      this.gui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", this.layout.startX, yPos, this.layout.widthLabel ), field.Label )
+
+      this.guiFields[ field.Key ] := this.gui.Add(
+        ( field.Key = "processName" ) ? "Edit" : "Text",
+        Format( "x{} y{} w{} {} Right",
+          this.layout.startX + this.layout.widthLabel + 10, yPos, this.layout.widthValue,
+          ( field.Key = "processName" ) ? "+ReadOnly -E0x200" : "BackgroundTrans"
+        )
+      )
+
+      if ( field.Key = "processName" ) {
+        this.guiFields[ field.Key ].Opt( "+Background" this.gui.BackColor )
+      }
+    }
+  }
+
+  OnResize( GuiObj, MinMax, Width, Height ) {
+    if ( MinMax = -1 || MinMax = 1 ) {
+      return ; Ignore minimize/maximize
+    }
+
+    for each, field in this.fields {
+      this.guiFields[ field.Key ].Move( Width - this.layout.widthValue - 20, this.layout.startY + this.layout.lineSpacing * ( A_Index - 1 ) )
+    }
+
+    ; ✅ Reset the timer correctly by using the stored bound function reference
+    SetTimer( this.reloadGuiBound, -500 )  ; If called again, it resets to 500ms
+  }
+
+  UpdateDebugGUI() {
+    MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
+    local processName := WinGetProcessName( mouseWindowId )
+    GetRelativeMouseY( &relativeY )
+
+    this.guiFields[ "ahkVersion" ].Text := A_AhkVersion
+    this.guiFields[ "ENABLE_WINDOW_RETURN" ].Text := ENABLE_WINDOW_RETURN ? "true" : "false"
+    this.guiFields[ "mouseX" ].Text := mouseX
+    this.guiFields[ "mouseY" ].Text := mouseY
+    this.guiFields[ "relativeY" ].Text := relativeY
+    this.guiFields[ "mouseWindowId" ].Text := mouseWindowId
+    this.guiFields[ "processName" ].Text := processName
+    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Text := ProcessInALLOWED_PROGRAMS( processName ) ? "true" : "false"
+
+    this.guiFields[ "processName" ].SetFont( "Bold" )
+
+    this.gui.Show( Format( "x{} y{} w380 h220", mouseX - 190, mouseY ) )
+    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
+  }
+
+  ReloadGUI() {
+    this.gui.Hide()
+    this.guiFields[ "ProcessInALLOWED_PROGRAMS" ].Focus()
+    this.gui.Show()
+  }
 }
 
-; Erstellen einer neuen GUI
-MyGui := Gui( )
-MyGui.BackColor := "FFFFFF"
-MyGui.Opt( "+MinSize600x300" )
-MyGui.SetFont( "s14 q5", "Segoe UI" )
-
-startX := 20
-startValueX := 0
-startY := 10
-lineSpacing := 25
-widthLabel := 150
-widthValue := 180
-
-; Array mit Label-Texten und entsprechenden Schlüsseln
-fields := [
-  { Key: "AhkVersion", Label: "AHK Version:" },
-  { Key: "MouseX", Label: "mouseX:" },
-  { Key: "MouseY", Label: "mouseY:" },
-  { Key: "RelativeY", Label: "relativeY:" },
-  { Key: "mouseWindowId", Label: "mouseWindowId:" },
-  { Key: "ProcessName", Label: "processName:" },
-  { Key: "ProcessIsInAllowedPrograms", Label: "ProcessIsInAllowedPrograms:" },
-]
-
-; Objekt zum Speichern der GUI-Feld-Referenzen
-global guiFields := Map( )
-
-for each, field in fields {
-  yPos := startY + lineSpacing * ( A_Index - 1 )
-  MyGui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", startX, yPos, widthLabel ), field.Label )
-  guiFields[ field.Key ] := MyGui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans Right", startX + widthLabel + 10, yPos, widthValue ) )
+SetDarkMode( hwnd ) {
+  static DWMWA_USE_IMMERSIVE_DARK_MODE := 20
+  versionParts := StrSplit( A_OSVersion, "." )
+  if ( versionParts[ 1 ] + 0 >= 10 && versionParts[ 3 ] + 0 >= 17763 ) {
+    DllCall( "dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", DWMWA_USE_IMMERSIVE_DARK_MODE, "int*", 1, "int", 4 )
+  }
 }
 
-MyGui.Title := "Debug"
+if ( DEBUG ) {
+  DebugInstance := DebugGUI()
+  $F12:: {
+    DebugInstance.UpdateDebugGUI()
+  }
+}
 
 return
