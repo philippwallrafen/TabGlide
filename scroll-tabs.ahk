@@ -18,10 +18,10 @@ global ALLOWED_PROGRAMS := Map(
   "WindowsTerminal.exe", true,
   "msedge.exe", true
 )
-global ENABLE_WINDOW_RETURN := true    ; If you want to return after scrolling on an inactive window
+global ENABLE_WINDOW_RETURN := true     ; If you want to return after scrolling on an inactive window
 global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
 global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - how forgiving the Y coordinate is
-global DEBUG := true                    ; Debug Mode
+global DEBUG := false                   ; Debug Mode
 
 ;; GENERAL & START-UP
 ;; =============================================
@@ -44,7 +44,15 @@ ALLOWED_PROGRAMS := lowercasedMap
 
 ;; HELPER FUNCTIONS
 ;; =============================================
-GetRelativeMouseY( &relativeToMonitorY ) {
+GetActiveWindow() {
+  try {
+    return WinGetID( "A" )
+  } catch {
+    ;;; Log("warning", "No active window found.")
+    return ""
+  }
+}
+GetRelativeMouseY() {
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
   ; Retrieve monitorHandle per Dll for the current mouse position (MONITOR_DEFAULTTONEAREST = 2)
   local monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" )
@@ -52,7 +60,7 @@ GetRelativeMouseY( &relativeToMonitorY ) {
   NumPut( "UInt", 40, monitorInfo, 0 )    ; Set the structure size (dwSize = 40)
   ; Retrieve monitorInfo per Dll
   if !DllCall( "GetMonitorInfo", "Ptr", monitorHandle, "Ptr", monitorInfo ) {
-    LogError( "error", "GetMonitorInfo failed for handle " monitorHandle )
+    ;;; Log( "error", "GetMonitorInfo failed for handle " monitorHandle )
     return false
   }
   ; The MONITORINFO structure is structured as follows:
@@ -77,7 +85,7 @@ AfterTimerEnds() {
     awaitingReturn := false
   }
 }
-LogError( level, message ) {
+Log( level, message ) {
   formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
   formattedLevel := "[" StrUpper( level ) "] "
   FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\error.log" )
@@ -95,12 +103,11 @@ LogError( level, message ) {
   if ( !processInMap ) {
     return
   }
-  GetRelativeMouseY( &relativeToMonitorY )
+  local relativeToMonitorY := GetRelativeMouseY()
   if ( relativeToMonitorY > TOP_REGION_PIXEL_LIMIT ) {
     return
   }
-  local activeWindow := WinGetID( "A" ), isDifferentWindow := mouseWindowId != activeWindow
-
+  local activeWindow := GetActiveWindow(), isDifferentWindow := mouseWindowId != activeWindow
   ; (optional) Return to original window
   if ( ENABLE_WINDOW_RETURN ) {
     TrackScrollActivity()
@@ -139,10 +146,9 @@ OnResizeKeepTextRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
   SetTimer( DebugGUI.reloadGuiBound, -500 )
 }
 UpdateDebugGUI( DebugGUI ) {
-  ; global awaitingReturn
+  ;;; global ENABLE_WINDOW_RETURN, awaitingReturn
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-  local guiFields := DebugGUI.guiFields, processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), activeWindow := WinGetID( "A" ), isDifferentWindow := mouseWindowId != activeWindow, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" )
-  GetRelativeMouseY( &relativeToMonitorY )
+  local guiFields := DebugGUI.guiFields, processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), activeWindow := WinGetID( "A" ), isDifferentWindow := mouseWindowId != activeWindow, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY()
 
   guiFields[ "ahkVersion" ].Text := A_AhkVersion
   guiFields[ "isAdmin" ].Text := A_IsAdmin ? "true" : "false"
@@ -189,7 +195,7 @@ CreateGUIElements( DebugGUI ) {
 ;; =============================================
 InitializeDebugGUI() {
   local DebugGUI := {
-    gui: Gui( "+Resize +MinSize370x300 -MaximizeBox" ),
+    gui: Gui( "+Resize +MinSize380x330 -MaximizeBox" ),
     layout: { startX: 20, startY: 10, lineSpacing: 25, widthLabel: 290, widthValue: 200 },
     guiFields: Map(),
     fields: []
