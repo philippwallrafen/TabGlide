@@ -48,7 +48,7 @@ GetActiveWindow() {
   try {
     return WinGetID( "A" )
   } catch {
-    ;;; Log("warning", "No active window found.")
+    Log( "warning", "No active window found." )
     return ""
   }
 }
@@ -60,7 +60,7 @@ GetRelativeMouseY() {
   NumPut( "UInt", 40, monitorInfo, 0 )    ; Set the structure size (dwSize = 40)
   ; Retrieve monitorInfo per Dll
   if !DllCall( "GetMonitorInfo", "Ptr", monitorHandle, "Ptr", monitorInfo ) {
-    ;;; Log( "error", "GetMonitorInfo failed for handle " monitorHandle )
+    Log( "error", "GetMonitorInfo failed for handle " monitorHandle )
     return false
   }
   ; The MONITORINFO structure is structured as follows:
@@ -86,9 +86,11 @@ AfterTimerEnds() {
   }
 }
 Log( level, message ) {
-  formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
-  formattedLevel := "[" StrUpper( level ) "] "
-  FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\error.log" )
+  if ( DEBUG ) {
+    formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
+    formattedLevel := "[" StrUpper( level ) "] "
+    FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\error.log" )
+  }
 }
 
 ;; MAIN
