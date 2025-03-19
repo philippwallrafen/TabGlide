@@ -1,4 +1,4 @@
-# 🚀 Scroll-Wheel Tab Switching (AHK) ~ e4zyphil
+# TabGlide – Seamless tab switching with your scroll wheel
 
 ## 📖 Overview
 

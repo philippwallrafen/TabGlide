@@ -15,6 +15,12 @@
     },
     "AHK++.v2.warn": {
       "localSameAsGlobal": true
+    },
+    "[plaintext]": {
+      "editor.formatOnSave": false
+    },
+    "files.associations": {
+      "LICENSE*": "plaintext"
     }
   }
 }

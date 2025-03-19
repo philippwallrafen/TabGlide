@@ -1,7 +1,13 @@
-;; =============================================
-;; scroll-wheel-tab-switching ~e4zyphil
-;; scroll-tabs.ahk
-;; =============================================
+/*
+ * This file is part of TabGlide (https://github.com/e4zyphil/tabglide).
+ * Copyright (c) 2025 Philipp Wallrafen
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * See the file LICENSE for the full license text.
+*/
 
 ;; CONFIG
 ;; =============================================
@@ -18,23 +24,22 @@ global ALLOWED_PROGRAMS := Map(
   "WindowsTerminal.exe", true,
   "msedge.exe", true
 )
-global ENABLE_WINDOW_RETURN := true     ; If you want to return after scrolling on an inactive window
-global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
-global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - how forgiving the Y coordinate is
-global DEBUG := false                   ; Debug Mode
+global ENABLE_FOCUS_RETURN := true      ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
+global RETURN_AFTER_MS := 500           ; Fine tune - Return to the previous active window after _ in ms
+global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordinate is
+global DEBUG := true                   ; Debug mode
+global DEBUG_GUI_BIND := "$F11"         ; Debug bind
 
 ;; GENERAL & START-UP
 ;; =============================================
 #Requires AutoHotkey v2
+#SingleInstance Force
+A_MaxHotkeysPerInterval := 200
+InstallMouseHook( true, true )
 CoordMode( "Mouse", "Screen" )
-global awaitingReturn := false
-global returnWindow := ""
-if ( DEBUG ) {
-  DebugGUI := InitializeDebugGUI()
-  $F12:: {                              ; Define your debug hotkey here !
-    UpdateDebugGUI( DebugGUI )
-  }
-}
+global awaitingRefocus := false
+global refocusWindow := ""
+
 ; Convert ALLOWED_PROGRAMS to lowercase
 lowercasedMap := Map()
 for program, value in ALLOWED_PROGRAMS {
@@ -44,12 +49,12 @@ ALLOWED_PROGRAMS := lowercasedMap
 
 ;; HELPER FUNCTIONS
 ;; =============================================
-GetActiveWindow() {
+GetFocusedWindowId() {
   try {
     return WinGetID( "A" )
   } catch {
     Log( "warning", "No active window found." )
-    return ""
+    return 0
   }
 }
 GetRelativeMouseY() {
@@ -79,18 +84,28 @@ TrackScrollActivity() {
   SetTimer( AfterTimerEnds, -RETURN_AFTER_MS )
 }
 AfterTimerEnds() {
-  global awaitingReturn, returnWindow
-  if ( awaitingReturn ) {
-    WinActivate( returnWindow )
-    awaitingReturn := false
+  global awaitingRefocus, refocusWindow
+  if ( awaitingRefocus ) {
+    FocusWindow( refocusWindow )
+    awaitingRefocus := false
+  }
+}
+FocusWindow( windowId ) {
+  try {
+    WinActivate( windowId )
+    return true
+  } catch {
+    Log( "warning", "Window to activate not found." )
+    return false
   }
 }
 Log( level, message ) {
-  if ( DEBUG ) {
-    formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
-    formattedLevel := "[" StrUpper( level ) "] "
-    FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\error.log" )
+  if ( !DEBUG ) {
+    return
   }
+  formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
+  formattedLevel := "[" StrUpper( level ) "] "
+  FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\tabglide.log" )
 }
 
 ;; MAIN
@@ -98,8 +113,7 @@ Log( level, message ) {
 ~$WheelDown::
 ~$WheelUp::
 {
-  ;;; global TOP_REGION_PIXEL_LIMIT, ENABLE_WINDOW_RETURN
-  global returnWindow, awaitingReturn
+  ;;; global TOP_REGION_PIXEL_LIMIT, ENABLE_FOCUS_RETURN
   MouseGetPos(, , &mouseWindowId )
   local processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) )
   if ( !processInMap ) {
@@ -109,17 +123,18 @@ Log( level, message ) {
   if ( relativeToMonitorY > TOP_REGION_PIXEL_LIMIT ) {
     return
   }
-  local activeWindow := GetActiveWindow(), isDifferentWindow := mouseWindowId != activeWindow
+  local focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId
   ; (optional) Return to original window
-  if ( ENABLE_WINDOW_RETURN ) {
+  if ( ENABLE_FOCUS_RETURN ) {
     TrackScrollActivity()
-    if ( isDifferentWindow && !awaitingReturn ) {
-      returnWindow := activeWindow
-      awaitingReturn := true
+    global refocusWindow, awaitingRefocus
+    if ( isUnfocusedWindow && !awaitingRefocus ) {
+      refocusWindow := focusedWindowId
+      awaitingRefocus := true
     }
   }
-  if ( isDifferentWindow ) {
-    WinActivate( mouseWindowId )
+  if ( isUnfocusedWindow ) {
+    FocusWindow( mouseWindowId )
   }
   if ( A_ThisHotkey = "~$WheelDown" ) {
     Send( "^{Tab}" )
@@ -128,6 +143,11 @@ Log( level, message ) {
   }
 }
 
+;; DEBUG-MODE
+;; =============================================
+if ( !DEBUG ) {
+  return
+}
 ;; DEBUG-GUI: Helper functions
 ;; =============================================
 DarkModeTitleBar( Hwnd ) {
@@ -148,9 +168,9 @@ OnResizeKeepTextRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
   SetTimer( DebugGUI.reloadGuiBound, -500 )
 }
 UpdateDebugGUI( DebugGUI ) {
-  ;;; global ENABLE_WINDOW_RETURN, awaitingReturn
+  ;;; global ENABLE_FOCUS_RETURN, awaitingRefocus
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-  local guiFields := DebugGUI.guiFields, processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), activeWindow := WinGetID( "A" ), isDifferentWindow := mouseWindowId != activeWindow, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY()
+  local guiFields := DebugGUI.guiFields, processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY()
 
   guiFields[ "ahkVersion" ].Text := A_AhkVersion
   guiFields[ "isAdmin" ].Text := A_IsAdmin ? "true" : "false"
@@ -160,13 +180,14 @@ UpdateDebugGUI( DebugGUI ) {
   guiFields[ "relativeToMonitorY" ].Text := relativeToMonitorY
   guiFields[ "processName" ].Text := processName
   guiFields[ "processInMap" ].Text := processInMap ? "true" : "false"
-  guiFields[ "isDifferentWindow" ].Text := isDifferentWindow ? "true" : "false"
-  guiFields[ "ENABLE_WINDOW_RETURN" ].Text := ENABLE_WINDOW_RETURN ? "true" : "false"
-  guiFields[ "returnWindowName" ].Text := WinGetProcessName( mouseWindowId )
-  guiFields[ "awaitingReturn" ].Text := awaitingReturn ? "true" : "false"
+  guiFields[ "isUnfocusedWindow" ].Text := isUnfocusedWindow ? "true" : "false"
+  guiFields[ "ENABLE_FOCUS_RETURN" ].Text := ENABLE_FOCUS_RETURN ? "true" : "false"
+  guiFields[ "refocusWindowName" ].Text := WinGetProcessName( mouseWindowId )
+  guiFields[ "awaitingRefocus" ].Text := awaitingRefocus ? "true" : "false"
 
   guiFields[ "processName" ].SetFont( "Bold" )
-  DebugGUI.gui.Show( Format( "x{} y{} w380", mouseX - 190, mouseY + 10 ) )
+  DebugGUI.gui.GetPos(, , &guiWidth )
+  DebugGUI.gui.Show( Format( "x{} y{}", mouseX - ( guiWidth / 2 ), mouseY + 10 ) )
   guiFields[ "processInMap" ].Focus()
 }
 ReloadGUI( DebugGUI ) {
@@ -207,7 +228,6 @@ InitializeDebugGUI() {
   DebugGUI.gui.BackColor := "1C1C1C"
   DebugGUI.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
   DarkModeTitleBar( DebugGUI.gui.Hwnd )
-
   debugKeys := [
     "ahkVersion",
     "isAdmin",
@@ -217,18 +237,27 @@ InitializeDebugGUI() {
     "relativeToMonitorY",
     "processName",
     "processInMap",
-    "isDifferentWindow",
-    "ENABLE_WINDOW_RETURN",
-    "returnWindowName",
-    "awaitingReturn",
+    "isUnfocusedWindow",
+    "ENABLE_FOCUS_RETURN",
+    "refocusWindowName",
+    "awaitingRefocus",
   ]
   for key in debugKeys {
     DebugGUI.fields.Push( { Key: key, Label: key ":" } )
   }
-
   CreateGUIElements( DebugGUI )
   DebugGUI.reloadGuiBound := ReloadGUI.Bind( DebugGUI )
   DebugGUI.gui.OnEvent( "Size", OnResizeKeepTextRightAligned.Bind( DebugGUI ) )
-
+  DebugGUI.gui.Show( "Hide y10000 w380" )
+  DebugGUI.gui.Hide
   return DebugGUI
+}
+;; DEBUG-GUI: Bind
+;; =============================================
+if ( DEBUG ) {
+  DebugGUI := InitializeDebugGUI()
+  Hotkey( DEBUG_GUI_BIND, ( * ) => DebugBind( DebugGUI ), "On" )
+}
+DebugBind( DebugGUI ) {
+  UpdateDebugGUI( DebugGUI )
 }
