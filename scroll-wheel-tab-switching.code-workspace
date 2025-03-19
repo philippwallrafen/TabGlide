@@ -5,6 +5,7 @@
     }
   ],
   "settings": {
+    "editor.wordWrap": "off",
     "AHK++.v2.formatter": {
       "arrayStyle": "expand",
       "indentString": "  ",
