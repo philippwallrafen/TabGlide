@@ -12,23 +12,23 @@
 ;; CONFIG
 ;; =============================================
 ; Add all suitable programs here :) I tried sorting them alphabetically
-global ALLOWED_PROGRAMS := Map(
-  "brave.exe", true,
-  "Code.exe", true,
-  "chrome.exe", true,
-  "chromium.exe", true,
-  "explorer.exe", true,
-  "firefox.exe", true,
-  "opera.exe", true,
-  "opera_gx.exe", true,
-  "WindowsTerminal.exe", true,
-  "msedge.exe", true
-)
+global ALLOWED_PROGRAMS := BuildLowercaseMap( [
+  "brave.exe",
+  "Code.exe",
+  "chrome.exe",
+  "chromium.exe",
+  "explorer.exe",
+  "firefox.exe",
+  "opera.exe",
+  "opera_gx.exe",
+  "WindowsTerminal.exe",
+  "msedge.exe"
+] )
 global ENABLE_FOCUS_RETURN := true      ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
-global RETURN_AFTER_MS := 500           ; Fine tune - Return to the previous active window after _ in ms
+global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
 global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordinate is
 global DEBUG := true                   ; Debug mode
-global DEBUG_GUI_BIND := "$F11"         ; Debug bind
+global DEBUG_GUI_BIND := "$F12"         ; Debug bind
 
 ;; GENERAL & START-UP
 ;; =============================================
@@ -38,24 +38,32 @@ A_MaxHotkeysPerInterval := 200
 InstallMouseHook( true, true )
 CoordMode( "Mouse", "Screen" )
 global awaitingRefocus := false
-global refocusWindow := ""
+global refocusWindowId := 0
 
-; Convert ALLOWED_PROGRAMS to lowercase
-lowercasedMap := Map()
-for program, value in ALLOWED_PROGRAMS {
-  lowercasedMap[ StrLower( program ) ] := value
+; Builds ALLOWED_PROGRAMS with lowercase keys and true values
+BuildLowercaseMap( array ) {
+  lowercaseMap := Map()
+  for program in array
+    lowercaseMap[ StrLower( program ) ] := true
+  return lowercaseMap
 }
-ALLOWED_PROGRAMS := lowercasedMap
 
 ;; HELPER FUNCTIONS
 ;; =============================================
+GetProcessName( windowId ) {
+  if ( !windowId || !WinExist( "ahk_id " windowId ) ) {
+    Log( "info", "GetProcessName(): Window to get processName not found '" windowId "' – returning '<invalid>'." )
+    return "<invalid>"
+  }
+  return WinGetProcessName( windowId )
+}
 GetFocusedWindowId() {
-  try {
-    return WinGetID( "A" )
-  } catch {
-    Log( "warning", "No active window found." )
+  local id := WinGetID( "A" )
+  if ( !id ) {
+    Log( "warning", "GetFocusedWindowId(): WinGetID returned '" id "' – returning 0." )
     return 0
   }
+  return id
 }
 GetRelativeMouseY() {
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
@@ -84,20 +92,19 @@ TrackScrollActivity() {
   SetTimer( AfterTimerEnds, -RETURN_AFTER_MS )
 }
 AfterTimerEnds() {
-  global awaitingRefocus, refocusWindow
+  global awaitingRefocus, refocusWindowId
   if ( awaitingRefocus ) {
-    FocusWindow( refocusWindow )
+    FocusWindow( refocusWindowId )
     awaitingRefocus := false
   }
 }
 FocusWindow( windowId ) {
-  try {
-    WinActivate( windowId )
-    return true
-  } catch {
-    Log( "warning", "Window to activate not found." )
+  if ( !windowId || !WinExist( "ahk_id " windowId ) ) {
+    Log( "warning", "FocusWindow(): Window to focus not found – ID: " windowId )
     return false
   }
+  WinActivate( "ahk_id " windowId )
+  return true
 }
 Log( level, message ) {
   if ( !DEBUG ) {
@@ -115,7 +122,7 @@ Log( level, message ) {
 {
   ;;; global TOP_REGION_PIXEL_LIMIT, ENABLE_FOCUS_RETURN
   MouseGetPos(, , &mouseWindowId )
-  local processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) )
+  local processName := GetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) )
   if ( !processInMap ) {
     return
   }
@@ -127,9 +134,9 @@ Log( level, message ) {
   ; (optional) Return to original window
   if ( ENABLE_FOCUS_RETURN ) {
     TrackScrollActivity()
-    global refocusWindow, awaitingRefocus
+    global refocusWindowId, awaitingRefocus
     if ( isUnfocusedWindow && !awaitingRefocus ) {
-      refocusWindow := focusedWindowId
+      refocusWindowId := focusedWindowId
       awaitingRefocus := true
     }
   }
@@ -170,19 +177,19 @@ OnResizeKeepTextRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
 UpdateDebugGUI( DebugGUI ) {
   ;;; global ENABLE_FOCUS_RETURN, awaitingRefocus
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-  local guiFields := DebugGUI.guiFields, processName := WinGetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY()
+  local guiFields := DebugGUI.guiFields, processName := GetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY(), refocusWindowName := GetProcessName( refocusWindowId )
 
   guiFields[ "ahkVersion" ].Text := A_AhkVersion
   guiFields[ "isAdmin" ].Text := A_IsAdmin ? "true" : "false"
   guiFields[ "mouseX" ].Text := mouseX
-  guiFields[ "monitorHandle" ].Text := monitorHandle
   guiFields[ "mouseY" ].Text := mouseY
+  guiFields[ "monitorHandle" ].Text := monitorHandle
   guiFields[ "relativeToMonitorY" ].Text := relativeToMonitorY
   guiFields[ "processName" ].Text := processName
   guiFields[ "processInMap" ].Text := processInMap ? "true" : "false"
   guiFields[ "isUnfocusedWindow" ].Text := isUnfocusedWindow ? "true" : "false"
   guiFields[ "ENABLE_FOCUS_RETURN" ].Text := ENABLE_FOCUS_RETURN ? "true" : "false"
-  guiFields[ "refocusWindowName" ].Text := WinGetProcessName( mouseWindowId )
+  guiFields[ "refocusWindowName" ].Text := refocusWindowName
   guiFields[ "awaitingRefocus" ].Text := awaitingRefocus ? "true" : "false"
 
   guiFields[ "processName" ].SetFont( "Bold" )
@@ -227,13 +234,15 @@ InitializeDebugGUI() {
   DebugGUI.gui.Title := "Debug"
   DebugGUI.gui.BackColor := "1C1C1C"
   DebugGUI.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
+  DebugGUI.gui.OnEvent( "Size", OnResizeKeepTextRightAligned.Bind( DebugGUI ) )
   DarkModeTitleBar( DebugGUI.gui.Hwnd )
+
   debugKeys := [
     "ahkVersion",
     "isAdmin",
     "mouseX",
-    "monitorHandle",
     "mouseY",
+    "monitorHandle",
     "relativeToMonitorY",
     "processName",
     "processInMap",
@@ -247,17 +256,17 @@ InitializeDebugGUI() {
   }
   CreateGUIElements( DebugGUI )
   DebugGUI.reloadGuiBound := ReloadGUI.Bind( DebugGUI )
-  DebugGUI.gui.OnEvent( "Size", OnResizeKeepTextRightAligned.Bind( DebugGUI ) )
-  DebugGUI.gui.Show( "Hide y10000 w380" )
-  DebugGUI.gui.Hide
+
+  DebugGUI.gui.Show( "Hide w400" )
+  DebugGUI.gui.Hide()
   return DebugGUI
 }
 ;; DEBUG-GUI: Bind
 ;; =============================================
 if ( DEBUG ) {
-  DebugGUI := InitializeDebugGUI()
-  Hotkey( DEBUG_GUI_BIND, ( * ) => DebugBind( DebugGUI ), "On" )
+  Hotkey( DEBUG_GUI_BIND, ( * ) => DebugBind(), "On" )
 }
-DebugBind( DebugGUI ) {
+DebugBind() {
+  static DebugGUI := InitializeDebugGUI()  ; ✅ Allowed here
   UpdateDebugGUI( DebugGUI )
 }
