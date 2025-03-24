@@ -40,7 +40,7 @@ CoordMode( "Mouse", "Screen" )
 global awaitingRefocus := false
 global refocusWindowId := 0
 
-; Builds ALLOWED_PROGRAMS with lowercase keys and true values
+; Builds ALLOWED_PROGRAMS as a map with lowercase keys and true values
 BuildLowercaseMap( array ) {
   lowercaseMap := Map()
   for program in array
@@ -56,14 +56,6 @@ GetProcessName( windowId ) {
     return "<invalid>"
   }
   return WinGetProcessName( windowId )
-}
-GetFocusedWindowId() {
-  local id := WinGetID( "A" )
-  if ( !id ) {
-    Log( "warning", "GetFocusedWindowId(): WinGetID returned '" id "' – returning 0." )
-    return 0
-  }
-  return id
 }
 GetRelativeMouseY() {
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
@@ -86,6 +78,14 @@ GetRelativeMouseY() {
   ; local monitorBottom := NumGet(monitorInfo, 16, "Int")
 
   return relativeToMonitorY := mouseY - monitorTop
+}
+GetFocusedWindowId() {
+  local id := WinGetID( "A" )
+  if ( !id ) {
+    Log( "warning", "GetFocusedWindowId(): WinGetID returned '" id "' – returning 0." )
+    return 0
+  }
+  return id
 }
 TrackScrollActivity() {
   ;;; global RETURN_AFTER_MS
@@ -155,16 +155,47 @@ Log( level, message ) {
 if ( !DEBUG ) {
   return
 }
+
 ;; DEBUG-GUI: Helper functions
 ;; =============================================
+;;; TODO: Implement if (paramStr == "ImmersiveColorSet") {InitializeDebugGUI}
+OnSystemThemeChanged( DebugGUI, wParam, lParam, msg, hwnd ) {
+  Log( "debug", "WM_SETTINGCHANGE received: wParam=" wParam ", lParam=" lParam ", msg=" msg ", hwnd=" hwnd )
+  if ( !lParam ) {
+    Log( "warning", "lParam is null." )
+    return 0
+  }
+  local paramStr := StrGet( lParam, "UTF-16" )
+  Log( "debug", "lParam string: " paramStr ) 0
+  return 0
+}
+IsWindowsDarkMode() {
+  try {
+    value := RegRead( "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme" )
+    return value = 0  ; 0 = dark mode, 1 = light mode
+  } catch {
+    Log( "warning", "IsWindowsDarkMode(): Could not read registry – defaulting to light mode" )
+    return false
+  }
+}
+SetLightMode( DebugGUI ) {
+  DebugGUI.gui.BackColor := "ffffff"
+  DebugGUI.gui.SetFont( "s14 q5 c1C1C1C", "Segoe UI" )
+}
+SetDarkMode( DebugGUI ) {
+  DebugGUI.gui.BackColor := "1C1C1C"
+  DebugGUI.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
+  DarkModeTitleBar( DebugGUI.gui.Hwnd )
+}
 DarkModeTitleBar( Hwnd ) {
   local osVersion := StrSplit( A_OSVersion, "." ), major := osVersion[ 1 ] + 0, build := osVersion[ 3 ] + 0
   static DWMWA_USE_IMMERSIVE_DARK_MODE := 20
+  ; Set dark title bar only when Windows version supports it
   if ( major >= 10 && build >= 17763 ) {
     DllCall( "dwmapi\DwmSetWindowAttribute", "ptr", Hwnd, "int", DWMWA_USE_IMMERSIVE_DARK_MODE, "int*", 1, "int", 4 )
   }
 }
-OnResizeKeepTextRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
+OnResizeKeepValuesRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
   if ( MinMax = -1 || MinMax = 1 ) {
     return    ; Ignore minimize/maximize
   }
@@ -172,7 +203,7 @@ OnResizeKeepTextRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
   for field in fields {
     guiFields[ field.Key ].Move( Width - layout.widthValue - 20, layout.startY + layout.lineSpacing * ( A_Index - 1 ) )
   }
-  SetTimer( DebugGUI.reloadGuiBound, -500 )
+  SetTimer( DebugGUI.reloadGui, -500 )
 }
 UpdateDebugGUI( DebugGUI ) {
   ;;; global ENABLE_FOCUS_RETURN, awaitingRefocus
@@ -206,21 +237,21 @@ ReloadGUI( DebugGUI ) {
 ;; DEBUG-GUI: Create elements loop
 ;; =============================================
 CreateGUIElements( DebugGUI ) {
-  local gui := DebugGUI.gui, fields := DebugGUI.fields, layout := DebugGUI.layout, guiFields := DebugGUI.guiFields, xPos := layout.startX + layout.widthLabel + 10, yPos := layout.startY + layout.lineSpacing * ( A_Index - 1 ), wValue := layout.widthValue
+  local gui := DebugGUI.gui, fields := DebugGUI.fields, layout := DebugGUI.layout, guiFields := DebugGUI.guiFields, xPos := layout.startX + layout.widthLabel + 10, wValue := layout.widthValue
   for field in fields {
-    ; Left side
-    gui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", layout.startX, layout.startY + layout.lineSpacing * ( A_Index - 1 ), layout.widthLabel ), field.Label )
-    ; Right side
+    yPos := layout.startY + layout.lineSpacing * ( A_Index - 1 )
+    ; Left side labels
+    gui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans", layout.startX, yPos, layout.widthLabel ), field.Label )
+    ; Right side values
     if ( field.Key = "processName" ) {
       guiFields[ field.Key ] := gui.Add( "Edit", Format( "x{} y{} w{} +ReadOnly -E0x200 Right", xPos, yPos, wValue ) )
+      guiFields[ field.Key ].Opt( "+Background" gui.BackColor )
     } else {
       guiFields[ field.Key ] := gui.Add( "Text", Format( "x{} y{} w{} BackgroundTrans Right", xPos, yPos, wValue ) )
     }
-    if ( field.Key = "processName" ) {
-      guiFields[ field.Key ].Opt( "+Background" gui.BackColor )
-    }
   }
 }
+
 ;; DEBUG-GUI: Setup
 ;; =============================================
 InitializeDebugGUI() {
@@ -230,12 +261,16 @@ InitializeDebugGUI() {
     guiFields: Map(),
     fields: []
   }
+  local windowWidth := 400
 
   DebugGUI.gui.Title := "Debug"
-  DebugGUI.gui.BackColor := "1C1C1C"
-  DebugGUI.gui.SetFont( "s14 q5 cffffff", "Segoe UI" )
-  DebugGUI.gui.OnEvent( "Size", OnResizeKeepTextRightAligned.Bind( DebugGUI ) )
-  DarkModeTitleBar( DebugGUI.gui.Hwnd )
+  DebugGUI.gui.OnEvent( "Size", OnResizeKeepValuesRightAligned.Bind( DebugGUI ) )
+  if ( IsWindowsDarkMode() = true ) {
+    SetDarkMode( DebugGUI )
+  } else {
+    SetLightMode( DebugGUI )
+  }
+  OnMessage( 0x001A, OnSystemThemeChanged.Bind( DebugGUI ) )
 
   debugKeys := [
     "ahkVersion",
@@ -255,18 +290,19 @@ InitializeDebugGUI() {
     DebugGUI.fields.Push( { Key: key, Label: key ":" } )
   }
   CreateGUIElements( DebugGUI )
-  DebugGUI.reloadGuiBound := ReloadGUI.Bind( DebugGUI )
+  DebugGUI.reloadGui := ReloadGUI.Bind( DebugGUI )
 
-  DebugGUI.gui.Show( "Hide w400" )
+  DebugGUI.gui.Show( "Hide w" windowWidth )
   DebugGUI.gui.Hide()
   return DebugGUI
 }
+
 ;; DEBUG-GUI: Bind
 ;; =============================================
 if ( DEBUG ) {
   Hotkey( DEBUG_GUI_BIND, ( * ) => DebugBind(), "On" )
 }
 DebugBind() {
-  static DebugGUI := InitializeDebugGUI()  ; ✅ Allowed here
+  static DebugGUI := InitializeDebugGUI()
   UpdateDebugGUI( DebugGUI )
 }
