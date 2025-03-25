@@ -1,0 +1,22 @@
+# Ignore the runtime log file
+tabglide.log
+
+# Ignore compiled executables
+*.exe
+
+# Ignore temporary backup or swap files (optional)
+*.bak
+*.tmp
+*.log
+
+# Ignore AutoHotkey debug and backup files (optional)
+*.ahk.bak
+*.ahk~
+
+# Ignore icon cache or development artifacts
+.DS_Store
+Thumbs.db
+
+# Optional: Ignore everything in a build/ or dist/ folder
+/build/
+/dist/
