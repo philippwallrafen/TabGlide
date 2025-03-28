@@ -1,5 +1,8 @@
 # Ignore the runtime log file
-tabglide.log
+TabGlide.log
+
+# Ignore user-specific config file
+TabGlide_config.ini
 
 # Ignore compiled executables
 *.exe

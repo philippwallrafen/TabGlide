@@ -1,5 +1,5 @@
 /*
- * This file is part of TabGlide (https://github.com/e4zyphil/tabglide).
+ * This file is part of TabGlide (https://github.com/e4zyphil/TabGlide).
  * Copyright (c) 2025 Philipp Wallrafen
  *
  * This program is free software: you can redistribute it and/or modify
@@ -14,20 +14,19 @@
 ; Add all suitable programs here :) I tried sorting them alphabetically
 global ALLOWED_PROGRAMS := BuildLowercaseMap( [
   "brave.exe",
-  "Code.exe",
   "chrome.exe",
   "chromium.exe",
   "explorer.exe",
   "firefox.exe",
+  "msedge.exe",
   "opera.exe",
   "opera_gx.exe",
   "WindowsTerminal.exe",
-  "msedge.exe"
 ] )
+global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordinate is
 global ENABLE_FOCUS_RETURN := true      ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
 global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
-global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordinate is
-global DEBUG := true                   ; Debug mode
+global DEBUG := false                   ; Debug mode
 global DEBUG_GUI_BIND := "$F12"         ; Debug bind
 
 ;; GENERAL & START-UP
@@ -38,7 +37,7 @@ A_MaxHotkeysPerInterval := 200
 InstallMouseHook( true, true )
 CoordMode( "Mouse", "Screen" )
 global awaitingRefocus := false
-global refocusWindowId := 0
+global refocusWindowId := -1
 
 ; Builds ALLOWED_PROGRAMS as a map with lowercase keys and true values
 BuildLowercaseMap( array ) {
@@ -48,11 +47,89 @@ BuildLowercaseMap( array ) {
   return lowercaseMap
 }
 
-;; HELPER FUNCTIONS
+; If using compiled version create TabGlide_config.ini and read content from there
+if ( A_IsCompiled ) {
+  global configFile := A_ScriptDir "\TabGlide_config.ini"
+  Log( "info", "TabGlide.exe started" )
+  if ( !FileExist( configFile ) ) {
+    CreateDefaultConfig( configFile )
+  }
+  LoadConfig( configFile )
+  Log( "debug", "TabGlide_config.ini loaded" )
+  Log( "debug", "ALLOWED_PROGRAMS: " FormatMapToString( ALLOWED_PROGRAMS ) )
+  Log( "debug", "TOP_REGION_PIXEL_LIMIT: " TOP_REGION_PIXEL_LIMIT )
+  Log( "debug", "ENABLE_FOCUS_RETURN: " ( ENABLE_FOCUS_RETURN ? "true" : "false" ) )
+  Log( "debug", "RETURN_AFTER_MS: " RETURN_AFTER_MS )
+  Log( "debug", "DEBUG: " ( DEBUG ? "true" : "false" ) )
+  Log( "debug", "DEBUG_GUI_BIND: " DEBUG_GUI_BIND )
+} else {
+  Log( "info", "TabGlide.ahk started" )
+}
+
+;; HELPER FUNCTIONS: Config & Logging
+;; =============================================
+CreateDefaultConfig( configFile ) {
+  local defaultConfig := "
+    (
+    [CONFIG]
+    ; Add all suitable programs here :) I tried sorting them alphabetically
+    ALLOWED_PROGRAMS = brave.exe,chrome.exe,chromium.exe,explorer.exe,firefox.exe,msedge.exe,opera.exe,opera_gx.exe,WindowsTerminal.exe
+
+    ; Fine tune - How forgiving the Y coordinate is
+    TOP_REGION_PIXEL_LIMIT = 50
+    ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
+    ENABLE_FOCUS_RETURN = true
+    ; Fine tune - Return to the previous active window after _ in ms
+    RETURN_AFTER_MS = 700
+    ; Debug mode
+    DEBUG = false
+    ; Debug bind
+    DEBUG_GUI_BIND = $F12
+    )"
+
+  FileAppend( "; " configFile "`n`n" defaultConfig, configFile )
+  Log( "info", "No TabGlide_config.ini found. Config created at: " configFile )
+  Run( configFile )
+}
+LoadConfig( configFile ) {
+  global ALLOWED_PROGRAMS, TOP_REGION_PIXEL_LIMIT, ENABLE_FOCUS_RETURN, RETURN_AFTER_MS, DEBUG, DEBUG_GUI_BIND
+  local allowedProgramsFromIni := IniRead( configFile, "CONFIG", "ALLOWED_PROGRAMS", "" )
+  if ( allowedProgramsFromIni ) {
+    local programList := StrSplit( allowedProgramsFromIni, "," )
+    for index, program in programList
+      programList[ index ] := Trim( program )
+    ALLOWED_PROGRAMS := BuildLowercaseMap( programList )
+  }
+  ENABLE_FOCUS_RETURN := StrLower( IniRead( configFile, "CONFIG", "ENABLE_FOCUS_RETURN", ENABLE_FOCUS_RETURN ) ) = "true"
+  RETURN_AFTER_MS := IniRead( configFile, "CONFIG", "RETURN_AFTER_MS", RETURN_AFTER_MS ) + 0                         ; Ensure numeric conversion
+  TOP_REGION_PIXEL_LIMIT := IniRead( configFile, "CONFIG", "TOP_REGION_PIXEL_LIMIT", TOP_REGION_PIXEL_LIMIT ) + 0    ; Ensure numeric conversion
+  DEBUG := StrLower( IniRead( configFile, "CONFIG", "DEBUG", DEBUG ) ) = "true"
+  DEBUG_GUI_BIND := IniRead( configFile, "CONFIG", "DEBUG_GUI_BIND", DEBUG_GUI_BIND )
+}
+FormatMapToString( dataMap ) {
+  local formattedOutput := ""
+  for key, value in dataMap {
+    formattedOutput .= key ": " value "`n"
+  }
+  return formattedOutput
+}
+Log( level, message ) {
+  if ( !DEBUG ) {
+    return
+  }
+  formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
+  formattedLevel := "[" StrUpper( level ) "] "
+  FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\TabGlide.log" )
+}
+
+;; HELPER FUNCTIONS: Main in order of execution
 ;; =============================================
 GetProcessName( windowId ) {
-  if ( !windowId || !WinExist( "ahk_id " windowId ) ) {
-    Log( "info", "GetProcessName(): Window to get processName not found '" windowId "' – returning '<invalid>'." )
+  if ( windowId = -1 ) {
+    Log( "debug", "GetProcessName(): refocusWindowId not set yet" )
+    return "<invalid>"
+  } else if ( !windowId || !WinExist( "ahk_id " windowId ) ) {
+    Log( "info", "GetProcessName(): Window to get processName not found '" windowId "' - returning '<invalid>'." )
     return "<invalid>"
   }
   return WinGetProcessName( windowId )
@@ -64,7 +141,7 @@ GetRelativeMouseY() {
   local monitorInfo := Buffer( 40, 0 )    ; Allocate a buffer for the MONITORINFO structure (40 bytes)
   NumPut( "UInt", 40, monitorInfo, 0 )    ; Set the structure size (dwSize = 40)
   ; Retrieve monitorInfo per Dll
-  if !DllCall( "GetMonitorInfo", "Ptr", monitorHandle, "Ptr", monitorInfo ) {
+  if ( !DllCall( "GetMonitorInfo", "Ptr", monitorHandle, "Ptr", monitorInfo ) ) {
     Log( "error", "GetMonitorInfo failed for handle " monitorHandle )
     return false
   }
@@ -93,10 +170,11 @@ TrackScrollActivity() {
 }
 AfterTimerEnds() {
   global awaitingRefocus, refocusWindowId
-  if ( awaitingRefocus ) {
+  local refocusWindowName := GetProcessName( refocusWindowId )
+  if ( awaitingRefocus && refocusWindowName != "explorer.exe" ) {
     FocusWindow( refocusWindowId )
-    awaitingRefocus := false
   }
+  awaitingRefocus := false
 }
 FocusWindow( windowId ) {
   if ( !windowId || !WinExist( "ahk_id " windowId ) ) {
@@ -106,19 +184,11 @@ FocusWindow( windowId ) {
   WinActivate( "ahk_id " windowId )
   return true
 }
-Log( level, message ) {
-  if ( !DEBUG ) {
-    return
-  }
-  formattedTime := "[" FormatTime( A_Now, "yyyy-MM-dd HH:mm:ss" ) "] "
-  formattedLevel := "[" StrUpper( level ) "] "
-  FileAppend( formattedTime formattedLevel message "`n", A_ScriptDir "\tabglide.log" )
-}
 
 ;; MAIN
 ;; =============================================
-~$WheelDown::
 ~$WheelUp::
+~$WheelDown::
 {
   ;;; global TOP_REGION_PIXEL_LIMIT, ENABLE_FOCUS_RETURN
   MouseGetPos(, , &mouseWindowId )
@@ -159,16 +229,16 @@ if ( !DEBUG ) {
 ;; DEBUG-GUI: Helper functions
 ;; =============================================
 ;;; TODO: Implement if (paramStr == "ImmersiveColorSet") {InitializeDebugGUI}
-OnSystemThemeChanged( DebugGUI, wParam, lParam, msg, hwnd ) {
-  Log( "debug", "WM_SETTINGCHANGE received: wParam=" wParam ", lParam=" lParam ", msg=" msg ", hwnd=" hwnd )
-  if ( !lParam ) {
-    Log( "warning", "lParam is null." )
-    return 0
-  }
-  local paramStr := StrGet( lParam, "UTF-16" )
-  Log( "debug", "lParam string: " paramStr ) 0
-  return 0
-}
+; OnSystemThemeChanged( DebugGUI, wParam, lParam, msg, hwnd ) {
+;   Log( "debug", "WM_SETTINGCHANGE received: wParam=" wParam ", lParam=" lParam ", msg=" msg ", hwnd=" hwnd )
+;   if ( !lParam ) {
+;     Log( "warning", "lParam is null." )
+;     return 0
+;   }
+;   local paramStr := StrGet( lParam, "UTF-16" )
+;   Log( "debug", "lParam string: " paramStr )
+;   return 0
+; }
 IsWindowsDarkMode() {
   try {
     value := RegRead( "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme" )
@@ -263,14 +333,15 @@ InitializeDebugGUI() {
   }
   local windowWidth := 400
 
-  DebugGUI.gui.Title := "Debug"
+  DebugGUI.gui.Title := "TabGlide"
   DebugGUI.gui.OnEvent( "Size", OnResizeKeepValuesRightAligned.Bind( DebugGUI ) )
   if ( IsWindowsDarkMode() = true ) {
     SetDarkMode( DebugGUI )
   } else {
     SetLightMode( DebugGUI )
   }
-  OnMessage( 0x001A, OnSystemThemeChanged.Bind( DebugGUI ) )
+  ;;; TODO: Implement if (paramStr == "ImmersiveColorSet") {InitializeDebugGUI}
+  ; OnMessage( 0x001A, OnSystemThemeChanged.Bind( DebugGUI ) )
 
   debugKeys := [
     "ahkVersion",
