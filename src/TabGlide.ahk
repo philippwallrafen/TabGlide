@@ -27,7 +27,7 @@ global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordi
 global ENABLE_FOCUS_RETURN := true      ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
 global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
 global DEBUG := false                   ; Debug mode
-global DEBUG_GUI_BIND := "$F12"         ; Debug bind
+global DEBUG_GUI_BIND := "$F12"         ; Debug bind - https://www.autohotkey.com/docs/v2/Hotkeys.htm
 
 ;; GENERAL & START-UP
 ;; =============================================
@@ -71,6 +71,8 @@ if ( A_IsCompiled ) {
 CreateDefaultConfig( configFile ) {
   local defaultConfig := "
     (
+    ; This file is part of TabGlide (https://github.com/e4zyphil/TabGlide).
+
     [CONFIG]
     ; Add all suitable programs here :) I tried sorting them alphabetically
     ALLOWED_PROGRAMS = brave.exe,chrome.exe,chromium.exe,explorer.exe,firefox.exe,msedge.exe,opera.exe,opera_gx.exe,WindowsTerminal.exe
@@ -83,11 +85,11 @@ CreateDefaultConfig( configFile ) {
     RETURN_AFTER_MS = 700
     ; Debug mode
     DEBUG = false
-    ; Debug bind
+    ; Debug bind - https://www.autohotkey.com/docs/v2/Hotkeys.htm
     DEBUG_GUI_BIND = $F12
     )"
 
-  FileAppend( "; " configFile "`n`n" defaultConfig, configFile )
+  FileAppend( "; " configFile "`n" defaultConfig, configFile )
   Log( "info", "No TabGlide_config.ini found. Config created at: " configFile )
   Run( configFile )
 }
