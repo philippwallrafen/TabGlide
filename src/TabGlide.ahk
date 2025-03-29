@@ -102,9 +102,9 @@ LoadConfig( configFile ) {
       programList[ index ] := Trim( program )
     ALLOWED_PROGRAMS := BuildLowercaseMap( programList )
   }
+  TOP_REGION_PIXEL_LIMIT := Integer( IniRead( configFile, "CONFIG", "TOP_REGION_PIXEL_LIMIT", TOP_REGION_PIXEL_LIMIT ) )    ; Ensure numeric conversion
   ENABLE_FOCUS_RETURN := StrLower( IniRead( configFile, "CONFIG", "ENABLE_FOCUS_RETURN", ENABLE_FOCUS_RETURN ) ) = "true"
-  RETURN_AFTER_MS := IniRead( configFile, "CONFIG", "RETURN_AFTER_MS", RETURN_AFTER_MS ) + 0                         ; Ensure numeric conversion
-  TOP_REGION_PIXEL_LIMIT := IniRead( configFile, "CONFIG", "TOP_REGION_PIXEL_LIMIT", TOP_REGION_PIXEL_LIMIT ) + 0    ; Ensure numeric conversion
+  RETURN_AFTER_MS := Integer( IniRead( configFile, "CONFIG", "RETURN_AFTER_MS", RETURN_AFTER_MS ) )                       ; Ensure numeric conversion
   DEBUG := StrLower( IniRead( configFile, "CONFIG", "DEBUG", DEBUG ) ) = "true"
   DEBUG_GUI_BIND := IniRead( configFile, "CONFIG", "DEBUG_GUI_BIND", DEBUG_GUI_BIND )
 }
@@ -136,8 +136,7 @@ GetProcessName( windowId ) {
   }
   return WinGetProcessName( windowId )
 }
-GetRelativeMouseY() {
-  MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
+GetRelativeMouseY( mouseX, mouseY ) {
   ; Retrieve monitorHandle per Dll for the current mouse position (MONITOR_DEFAULTTONEAREST = 2)
   local monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" )
   local monitorInfo := Buffer( 40, 0 )    ; Allocate a buffer for the MONITORINFO structure (40 bytes)
@@ -159,12 +158,12 @@ GetRelativeMouseY() {
   return relativeToMonitorY := mouseY - monitorTop
 }
 GetFocusedWindowId() {
-  local id := WinGetID( "A" )
-  if ( !id ) {
-    Log( "warning", "GetFocusedWindowId(): WinGetID returned '" id "' – returning 0." )
+  local focusedWindowId := WinGetID( "A" )
+  if ( !focusedWindowId ) {
+    Log( "warning", "GetFocusedWindowId(): WinGetID returned '" focusedWindowId "' – returning 0." )
     return 0
   }
-  return id
+  return focusedWindowId
 }
 TrackScrollActivity() {
   ;;; global RETURN_AFTER_MS
@@ -193,12 +192,12 @@ FocusWindow( windowId ) {
 ~$WheelDown::
 {
   ;;; global TOP_REGION_PIXEL_LIMIT, ENABLE_FOCUS_RETURN
-  MouseGetPos(, , &mouseWindowId )
+  MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
   local processName := GetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) )
   if ( !processInMap ) {
     return
   }
-  local relativeToMonitorY := GetRelativeMouseY()
+  local relativeToMonitorY := GetRelativeMouseY( mouseX, mouseY )
   if ( relativeToMonitorY > TOP_REGION_PIXEL_LIMIT ) {
     return
   }
@@ -215,10 +214,10 @@ FocusWindow( windowId ) {
   if ( isUnfocusedWindow ) {
     FocusWindow( mouseWindowId )
   }
-  if ( A_ThisHotkey = "~$WheelDown" ) {
-    Send( "^{Tab}" )
-  } else {
+  if ( A_ThisHotkey = "~$WheelUp" ) {
     Send( "^+{Tab}" )
+  } else {
+    Send( "^{Tab}" )
   }
 }
 
@@ -260,7 +259,7 @@ SetDarkMode( DebugGUI ) {
   DarkModeTitleBar( DebugGUI.gui.Hwnd )
 }
 DarkModeTitleBar( Hwnd ) {
-  local osVersion := StrSplit( A_OSVersion, "." ), major := osVersion[ 1 ] + 0, build := osVersion[ 3 ] + 0
+  local osVersion := StrSplit( A_OSVersion, "." ), major := Integer( osVersion[ 1 ] ), build := Integer( osVersion[ 3 ] )
   static DWMWA_USE_IMMERSIVE_DARK_MODE := 20
   ; Set dark title bar only when Windows version supports it
   if ( major >= 10 && build >= 17763 ) {
@@ -280,7 +279,7 @@ OnResizeKeepValuesRightAligned( DebugGUI, GuiObj, MinMax, Width, Height ) {
 UpdateDebugGUI( DebugGUI ) {
   ;;; global ENABLE_FOCUS_RETURN, awaitingRefocus
   MouseGetPos( &mouseX, &mouseY, &mouseWindowId )
-  local guiFields := DebugGUI.guiFields, processName := GetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY(), refocusWindowName := GetProcessName( refocusWindowId )
+  local guiFields := DebugGUI.guiFields, processName := GetProcessName( mouseWindowId ), processInMap := ALLOWED_PROGRAMS.Has( StrLower( processName ) ), focusedWindowId := GetFocusedWindowId(), isUnfocusedWindow := mouseWindowId != focusedWindowId, monitorHandle := DllCall( "MonitorFromPoint", "int64", ( mouseX & 0xFFFFFFFF ) | ( mouseY << 32 ), "uint", 2, "ptr" ), relativeToMonitorY := GetRelativeMouseY( mouseX, mouseY ), refocusWindowName := GetProcessName( refocusWindowId )
 
   guiFields[ "ahkVersion" ].Text := A_AhkVersion
   guiFields[ "isAdmin" ].Text := A_IsAdmin ? "true" : "false"
