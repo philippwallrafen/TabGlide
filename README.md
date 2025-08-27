@@ -20,8 +20,8 @@ Demo GIF
 
 Either:
 
-- a) Download .exe and install
-- b) Install AutoHotKey, run .ahk file.
+- Download .exe and install
+- Install AutoHotKey, run .ahk file.
 
 ## ▶️ How to Use
 
