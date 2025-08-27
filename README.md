@@ -32,7 +32,7 @@ Either:
 
 ## ⚙️ Configuration
 
-Modify the following global variables in `scroll-tabs.ahk`.
+Modify the following global variables in `scroll-tabs.ahk`.  
 If using the .exe the config gets automatically put in `C:\Users\{username}\AppData\Roaming\TabGlide\TabGlide_config.ini`.
 
 ```ahk
