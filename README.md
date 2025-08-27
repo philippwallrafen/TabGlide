@@ -20,8 +20,8 @@ Demo GIF
 
 Either:
 
-a) Download .exe and install
-b) Install AutoHotKey, run .ahk file.
+- a) Download .exe and install
+- b) Install AutoHotKey, run .ahk file.
 
 ## ▶️ How to Use
 
@@ -32,13 +32,21 @@ b) Install AutoHotKey, run .ahk file.
 
 ## ⚙️ Configuration
 
-Modify the following global variables in `scroll-tabs.ahk`:
+Modify the following global variables in `scroll-tabs.ahk`.
+If using the .exe the config gets automatically put in `C:\Users\{username}\AppData\Roaming\TabGlide\TabGlide_config.ini`.
 
 ```ahk
-global TOP_REGION_PIXEL_LIMIT := 50   ; Defines the activation area for scrolling.
-global ENABLE_WINDOW_RETURN := true    ; Return to the original window after switching.
-global RETURN_AFTER_MS := 700         ; Time before returning to the original window (in ms).
-global DEBUG := true                  ; Enable debug GUI.
+; Add all suitable programs here :) I tried sorting them alphabetically
+global ALLOWED_PROGRAMS := BuildLowercaseMap( [
+  "brave.exe",
+  "chrome.exe",
+  ...
+] )
+global TOP_REGION_PIXEL_LIMIT := 50     ; Fine tune - How forgiving the Y coordinate is
+global ENABLE_FOCUS_RETURN := true      ; Controls whether focus returns to the previous window (true) or remains on the new one (false)
+global RETURN_AFTER_MS := 700           ; Fine tune - Return to the previous active window after _ in ms
+global DEBUG := false                   ; Debug mode
+global DEBUG_GUI_BIND := "$F12"         ; Debug bind - https://www.autohotkey.com/docs/v2/Hotkeys.htm
 ```
 
 ## ✅ Supported Applications
