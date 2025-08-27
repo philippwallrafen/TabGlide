@@ -14,16 +14,14 @@ This AutoHotkey (AHK) script allows **seamless tab switching** in supported appl
 
 ## 📷 Demo
 
-_(Add a demo GIF or screenshot here for clarity.)_
+Demo GIF
 
 ## 🔧 Installation
 
-1. **Install AutoHotkey** (if not already installed) from [AutoHotkey.com](https://www.autohotkey.com/).
-2. **Download the script** or clone this repository:
-   git clone <https://github.com/yourusername/scroll-wheel-tab-switching.git>
+Either:
 
-3. **Run the script** by double-clicking `scroll-tabs.ahk`.
-4. _(Optional)_ **Set it to run on startup** for seamless operation.
+a) Download .exe and install
+b) Install AutoHotKey, run .ahk file.
 
 ## ▶️ How to Use
 
@@ -57,29 +55,17 @@ To customize compatibility, modify the `ALLOWED_PROGRAMS` list in the script.
 
 - **AutoHotkey v2** – A powerful scripting language for Windows automation.
 
-## 📝 Contributing
-
-Contributions are welcome! To contribute:
-
-1. **Fork the repository**.
-2. **Create a new branch** (`feature/new-feature`).
-3. **Submit a pull request** with your changes.
-
 ## 🐞 Troubleshooting & FAQ
 
 **Q: The script is not working in my browser.**
-A: Ensure that your browser’s process name is included in the `ALLOWED_PROGRAMS` list.
+A: Ensure that your programs’s process name is included in the `ALLOWED_PROGRAMS` list.
 
 **Q: How can I adjust the scroll sensitivity?**
 A: Modify the `TOP_REGION_PIXEL_LIMIT` value in the script settings.
 
 ## 📄 License
 
-This project is licensed under the **GNU GENERAL PUBLIC LICENSE** – feel free to use and modify it!
-
-## 🤝 Acknowledgments
-
-Special thanks to the **AHK community** for their support and contributions.
+This project is licensed under the **GNU GENERAL PUBLIC LICENSE**
 
 ---
 
