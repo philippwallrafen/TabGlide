@@ -1,5 +1,5 @@
 /*
- * This file is part of TabGlide (https://github.com/e4zyphil/TabGlide).
+ * This file is part of TabGlide (https://github.com/philippwallrafen/TabGlide).
  * Copyright (c) 2025 Philipp Wallrafen
  *
  * This program is free software: you can redistribute it and/or modify
@@ -71,7 +71,7 @@ if ( A_IsCompiled ) {
 CreateDefaultConfig( configFile ) {
   local defaultConfig := "
     (
-    ; This file is part of TabGlide (https://github.com/e4zyphil/TabGlide).
+    ; This file is part of TabGlide (https://github.com/philippwallrafen/TabGlide).
 
     [CONFIG]
     ; Add all suitable programs here :) I tried sorting them alphabetically
