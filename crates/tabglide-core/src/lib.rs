@@ -275,9 +275,7 @@ pub fn process_event(
             request_id,
             outcome,
         } => {
-            let Some(mut pending) = state.pending_switch else {
-                return None;
-            };
+            let mut pending = state.pending_switch?;
             if pending.request_id != request_id || pending.stage != SwitchStage::AwaitingFocus {
                 return None;
             }
@@ -310,9 +308,7 @@ pub fn process_event(
             request_id,
             outcome,
         } => {
-            let Some(pending) = state.pending_switch else {
-                return None;
-            };
+            let pending = state.pending_switch?;
             if pending.request_id != request_id || pending.stage != SwitchStage::AwaitingTabInput {
                 return None;
             }
