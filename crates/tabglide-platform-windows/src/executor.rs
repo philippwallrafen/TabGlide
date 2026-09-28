@@ -6,7 +6,6 @@ const FOREGROUND_CONFIRMATION_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub(crate) trait WindowOperations {
     fn is_valid(&self, window: WindowId) -> bool;
-    fn can_restore(&self, window: WindowId) -> bool;
     fn foreground(&self) -> Option<WindowId>;
     fn activate(&mut self, window: WindowId) -> bool;
     fn wait_for_foreground(&self, window: WindowId, timeout: Duration) -> bool;
@@ -20,7 +19,6 @@ pub(crate) enum Outcome {
     FocusDenied,
     FocusUnconfirmed,
     InputFailed,
-    RestoreSuppressed,
 }
 
 pub(crate) fn execute(command: Command, windows: &mut impl WindowOperations) -> Outcome {
@@ -30,9 +28,6 @@ pub(crate) fn execute(command: Command, windows: &mut impl WindowOperations) -> 
     };
     if !windows.is_valid(target) {
         return Outcome::InvalidWindow;
-    }
-    if matches!(command, Command::RestoreFocus { .. }) && !windows.can_restore(target) {
-        return Outcome::RestoreSuppressed;
     }
     if windows.foreground() != Some(target) {
         if !windows.activate(target) {
@@ -69,7 +64,6 @@ mod tests {
     struct FakeWindows {
         valid: bool,
         vanish_on_activation: bool,
-        excluded_original: Option<WindowId>,
         focused: Option<WindowId>,
         activation_accepted: bool,
         confirm_foreground: bool,
@@ -82,7 +76,6 @@ mod tests {
             Self {
                 valid: true,
                 vanish_on_activation: false,
-                excluded_original: None,
                 focused: None,
                 activation_accepted: true,
                 confirm_foreground: true,
@@ -98,9 +91,6 @@ mod tests {
         }
         fn foreground(&self) -> Option<WindowId> {
             self.focused
-        }
-        fn can_restore(&self, window: WindowId) -> bool {
-            self.excluded_original != Some(window)
         }
         fn activate(&mut self, target: WindowId) -> bool {
             self.activations += 1;
@@ -202,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn explorer_origin_is_retained_across_multiple_targets_and_suppressed_at_return() {
+    fn original_window_is_restored_after_multiple_targets() {
         use std::time::{Duration, Instant};
         use tabglide_core::{
             AppState, ApplicationId, CoreConfig, InputEvent, RefocusState, WheelDirection,
@@ -217,10 +207,9 @@ mod tests {
             allowed_applications: vec![ApplicationId::new("browser.exe")],
         };
         let mut state = AppState::default();
-        let explorer = WindowId(1);
+        let original = WindowId(1);
         let mut windows = FakeWindows {
-            focused: Some(explorer),
-            excluded_original: Some(explorer),
+            focused: Some(original),
             ..Default::default()
         };
         for target in [WindowId(2), WindowId(3)] {
@@ -245,7 +234,7 @@ mod tests {
         let RefocusState::Pending(pending) = state.refocus else {
             panic!("missing burst origin")
         };
-        assert_eq!(pending.window, explorer);
+        assert_eq!(pending.window, original);
         let command = process_event(
             InputEvent::RefocusTimerElapsed {
                 generation: pending.generation,
@@ -256,9 +245,9 @@ mod tests {
             pending.deadline,
         )
         .unwrap();
-        assert_eq!(execute(command, &mut windows), Outcome::RestoreSuppressed);
-        assert_eq!(windows.focused, Some(WindowId(3)));
-        assert_eq!(windows.activations, 2);
+        assert_eq!(execute(command, &mut windows), Outcome::Completed);
+        assert_eq!(windows.focused, Some(original));
+        assert_eq!(windows.activations, 3);
         assert_eq!(state.refocus, RefocusState::Idle);
     }
 }

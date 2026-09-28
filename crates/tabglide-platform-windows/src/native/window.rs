@@ -96,9 +96,6 @@ impl WindowOperations for NativeWindows {
     fn is_valid(&self, window: WindowId) -> bool {
         identity(handle(window)) == Some(window)
     }
-    fn can_restore(&self, window: WindowId) -> bool {
-        application(window).is_some_and(|name| name != "explorer.exe")
-    }
     fn foreground(&self) -> Option<WindowId> {
         // SAFETY: getter takes no pointers and returns a borrowed handle, validated by identity.
         identity(unsafe { GetForegroundWindow() })

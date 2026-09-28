@@ -12,7 +12,7 @@ Source of truth: `legacy/ahk/TabGlide.ahk`, preserved from `src/TabGlide.ahk`.
 | Focus return enabled | Remember first original window in a scrolling burst | Preserved |
 | More eligible scrolls | Extend return deadline, including scrolls over an already focused target | Preserved; generation rejects stale timers |
 | Unsupported app / outside region | Ignore without extending deadline | Preserved |
-| Original window is Explorer | Skip return, even for ordinary Explorer windows | Preserved; exception applies to original window, not hovered target |
+| Original window is Explorer | Skip return, even for ordinary Explorer windows | Intentional Rust change: return normally when the original Explorer window is still valid |
 | Original window disappears | Ignore focus attempt | Preserved, also validate process/thread identity |
 | Focus return disabled | Activate target and leave focus there | Preserved |
 | Single instance | Force-replace previous instance | Keep existing instance; second launch exits successfully (intentional safer change) |

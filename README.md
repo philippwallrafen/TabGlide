@@ -13,7 +13,7 @@ TabGlide switches tabs when you scroll at the top edge of a monitor. The Windows
 
 Hover over an allowed application's window within the first 50 physical pixels from the top of its monitor (including pixel 50). Scroll up for the previous tab or down for the next tab. This is a monitor-edge region, not tab-bar detection. The original wheel event still reaches Windows/the application.
 
-TabGlide activates an unfocused target before sending the shortcut. By default it returns focus to the original window 700 ms after the last eligible scroll. Further eligible scrolls preserve the first original window and restart the delay. As in the AHK version, it never returns focus to an `explorer.exe` window, including ordinary Explorer windows. Explorer itself remains an allowed tab-switching target on systems with Explorer tabs.
+TabGlide activates an unfocused target before sending the shortcut. By default it returns focus to the original window 700 ms after the last eligible scroll. Further eligible scrolls preserve the first original window and restart the delay. The Rust version returns to any still-valid original window, including Windows Explorer; Explorer itself also remains an allowed tab-switching target on systems with Explorer tabs.
 
 Use the notification-area icon for **Enable/Disable**, **Settings**, **Reload Config**, **Diagnostics**, or **Exit**. Settings opens the TOML file in Notepad; save it, then choose Reload Config. A bad reload leaves the last valid configuration active and displays the error. Disable and successful reload cancel pending focus return. Another launch leaves the existing instance running. `TabGlide.exe --exit` requests graceful shutdown and waits up to five seconds.
 

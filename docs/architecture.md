@@ -26,9 +26,9 @@ flowchart LR
 
 `RefocusState` is Idle or Pending with the first original window, deadline and generation. Every eligible wheel extends that deadline and advances the generation, even if the target is already focused. Unsupported applications/out-of-region events do not extend it. Timers must match both generation and deadline. Disable and successful reload invalidate pending state. Time is passed into the core, never read there.
 
-Commands describe complete operations, not arrays of primitive focus/key actions. A switch validates identity, activates only when needed, rechecks identity/actual foreground, and sends keys only on success. The caller restores the previous core state if the target is invalid or activation fails, retaining any older valid return. An input failure after successful activation retains the return, because focus already moved.
+Commands describe complete operations, not arrays of primitive focus/key actions. A switch validates identity, activates only when needed, confirms the actual foreground window, and sends keys only on success. The caller restores the previous core state if the target is invalid or activation is rejected, retaining any older valid return. An input failure after successful activation retains the return, because focus already moved.
 
-Explorer's exception is implemented at execution time: keep the first original window throughout the burst, then suppress return if its process basename is `explorer.exe`. This reproduces AHK even when one burst spans several hovered targets. Process-query failure also skips return conservatively. The core knows no Explorer special case.
+Focus return is process-agnostic: any still-valid original top-level window can be restored, including Windows Explorer. The core and executor therefore have no Explorer-specific return suppression.
 
 ## Hook, queue, wakeups and shutdown
 

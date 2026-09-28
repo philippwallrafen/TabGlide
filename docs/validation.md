@@ -24,7 +24,7 @@ Final local checks on Windows x64 (2026-09-28), after all review fixes:
 
 Local artifacts: `build/TabGlide-1.1.0-windows-x64-setup.exe`, `build/SHA256SUMS.txt`, `build/embedded.manifest`, `build/legacy-guard-test.log`, `build/final-cargo-tree.txt` and `build/final-diff.patch`. The installer SHA256 from this build is `9ee5f4f2c5d07d386384be08e94dff757f755f1fadee9d6edba6f0affa54d5d1`; rebuilding Inno may produce a different hash. Executables are ignored and none are tracked. GitHub-hosted CI and tagged release publication were not run; no push, tag or release was performed.
 
-Core tests cover allowlist, activation boundary, both directions, already/unfocused targets, return disabled/enabled, first-original preservation, repeated scroll deadline/generation changes, early/stale timers, cancellation and unknown context. Config tests cover defaults, partial config, validation and byte-for-byte preservation of valid/invalid existing files. Executor fakes cover successful/failed activation, already-focused targets, vanished windows, destruction during activation, input failure and the Explorer-origin multi-target burst. Logging regression coverage verifies an already-visited callsite through disabled/enabled/disabled/enabled transitions.
+Core tests cover allowlist, activation boundary, both directions, already/unfocused targets, return disabled/enabled, first-original preservation, repeated scroll deadline/generation changes, early/stale timers, cancellation and unknown context. Config tests cover defaults, partial config, validation and byte-for-byte preservation of valid/invalid existing files. Executor fakes cover successful/failed activation, accepted-but-unconfirmed activation, already-focused targets, vanished windows, destruction during activation, input failure and multi-target focus return. Logging regression coverage verifies an already-visited callsite through disabled/enabled/disabled/enabled transitions.
 
 The interactive Windows smoke test was **attempted, not passed**: `GetCursorPos` failed with `0x80070005` (Access is denied) in the tool execution session before creating test windows or injecting input. It remains an opt-in ignored test for an unlocked interactive desktop. It exercises the real low-level hook and original-wheel delivery to an owned test window, monitor-relative context, Ctrl+Tab/Ctrl+Shift+Tab receipt, foreground activation/return, invalid-window rejection and idle shutdown.
 
@@ -33,7 +33,7 @@ The interactive Windows smoke test was **attempted, not passed**: `GetCursorPos`
 These checks remain unverified unless a result is explicitly recorded:
 
 - Chrome/Firefox/Edge/Terminal and Explorer tabs: both wheel directions, original wheel passthrough, focused and unfocused targets.
-- Burst focus return at 700 ms, delay extension, crossing several target windows, original Explorer window suppressing return, closing the original target before timeout.
+- Burst focus return at 700 ms, delay extension, crossing several target windows, return to an original Explorer window, closing the original target before timeout.
 - Allowlist rejection, pixel 50 inclusive and pixel 51 excluded, multiple monitors with negative origins and mixed DPI.
 - Modified wheel gestures, denied foreground activation and an elevated target (no automatic elevation or input to an unrelated window).
 - Enable/Disable, Settings, invalid/valid Reload Config, logging on/off, Diagnostics and Exit; Explorer restart restores the tray icon.
@@ -44,8 +44,8 @@ The migration plan explicitly permits reporting manually untested runtime behavi
 
 ## Review record
 
-- ARCHITECTURE: dependency direction approved; emphasized first original window, inclusive boundary, Explorer exception, bounded queues and failure rollback.
-- TEST: Explorer-origin burst regression found and fixed, with a cross-core/executor regression test. Added valid-config preservation and destruction-during-activation coverage.
+- ARCHITECTURE: dependency direction approved; emphasized first original window, inclusive boundary, bounded queues and failure rollback.
+- TEST: multi-target focus-return regression coverage keeps the first original window across a burst. Added valid-config preservation and destruction-during-activation coverage.
 - WINDOWS: modifier filtering moved before focus mutation; TaskbarCreated handling moved into WndProc/private-message forwarding; partial-input cleanup restricted to inserted keys.
 - PACKAGING: added a legacy-install guard and migration instructions, plus removal of the existing startup shortcut when autostart is deselected. Preserved the user's `AppVersion "1.1"` default.
 - Fresh final REVIEW: fixed dynamic logging filtering and minimum Windows version. Follow-up inspection confirmed both fixes and no outstanding Critical/High or substantive Medium findings. Reviewers made no implementation edits.
@@ -62,7 +62,7 @@ The migration plan explicitly permits reporting manually untested runtime behavi
 | Dedicated WH_MOUSE_LL thread, bounded nonblocking queue, wheel passthrough | `native/hook.rs`, independent Windows/final reviews; real wheel delivery remains unverified |
 | No polling, per-event threads or config/UI work in hook | Event wait and callback source, bounded-batch review |
 | Focus success validation, missing windows and input failures | Executor tests plus native validation/SendInput code; real desktop/UIPI cases remain unverified |
-| Explorer special case and original AHK behaviors | `docs/behavior.md`, preserved source, cross-core/executor Explorer-burst regression |
+| Focus return including Explorer | `docs/behavior.md`, preserved legacy source for comparison, executor multi-target return regression |
 | Single instance, diagnostics, lifecycle and native tray actions | `native/mod.rs`, `logging.rs`, `tray.rs`; logging test and no-instance exit test; other desktop actions remain unverified |
 | TOML defaults and user config/log locations | Config tests, startup paths, README; no file shipped next to EXE |
 | PerMonitorV2 / standard-user manifest | Extracted release executable manifest |
