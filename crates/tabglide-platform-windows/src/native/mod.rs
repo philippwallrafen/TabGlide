@@ -54,7 +54,9 @@ impl InstanceGuard {
                 SetEvent(replace.0)?;
                 let wait = WaitForSingleObject(mutex.0, 5000);
                 if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
-                    return Err("Previous TabGlide instance did not exit within five seconds".into());
+                    return Err(
+                        "Previous TabGlide instance did not exit within five seconds".into(),
+                    );
                 }
             }
 
