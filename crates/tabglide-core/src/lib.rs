@@ -313,9 +313,7 @@ pub fn process_event(
             let Some(pending) = state.pending_switch else {
                 return None;
             };
-            if pending.request_id != request_id
-                || pending.stage != SwitchStage::AwaitingTabInput
-            {
+            if pending.request_id != request_id || pending.stage != SwitchStage::AwaitingTabInput {
                 return None;
             }
 
@@ -582,8 +580,7 @@ mod tests {
 
         context.focused_window = Some(context.hovered_window);
         let later = now + Duration::from_millis(100);
-        let Some(Effect::SendTab { request_id, .. }) =
-            wheel(&config, &context, &mut state, later)
+        let Some(Effect::SendTab { request_id, .. }) = wheel(&config, &context, &mut state, later)
         else {
             panic!()
         };
