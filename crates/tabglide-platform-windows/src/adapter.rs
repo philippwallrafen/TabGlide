@@ -101,18 +101,10 @@ pub(crate) fn execute(effect: Effect, windows: &mut impl WindowOperations) -> Ex
                 );
             }
             if windows.foreground() != Some(target_window) {
-                return tab_feedback(
-                    request_id,
-                    TabInputOutcome::FocusLost,
-                    Outcome::FocusLost,
-                );
+                return tab_feedback(request_id, TabInputOutcome::FocusLost, Outcome::FocusLost);
             }
             if !windows.send_tab(direction) {
-                return tab_feedback(
-                    request_id,
-                    TabInputOutcome::Failed,
-                    Outcome::InputFailed,
-                );
+                return tab_feedback(request_id, TabInputOutcome::Failed, Outcome::InputFailed);
             }
             tab_feedback(request_id, TabInputOutcome::Sent, Outcome::Completed)
         }
