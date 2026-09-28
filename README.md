@@ -1,6 +1,6 @@
 # TabGlide
 
-TabGlide switches tabs when you scroll at the top edge of a monitor. The Windows application is written in Rust and uses native Windows input and tray APIs. AutoHotkey is no longer required.
+TabGlide switches tabs when you scroll at the top edge of a monitor. The shared behavior core is written in Rust. The current Windows host is a thin Rust/Win32 adapter around that core and uses native Windows input and tray APIs; the adapter boundary is designed so Windows UI can move to C# without moving product policy out of Rust. AutoHotkey is no longer required.
 
 | Platform | Status |
 | --- | --- |

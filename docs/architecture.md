@@ -2,11 +2,11 @@
 
 ## Boundaries and dependencies
 
-`tabglide-core` is a standard-library-only decision engine. It has no platform imports, system calls, key codes or unsafe code. It accepts opaque `WindowId`/`ApplicationId`, `WindowContext`, `InputEvent`, configuration, mutable `AppState`, and an explicit monotonic `Instant`. Only tests call `Instant::now()` inside the core crate.
+`tabglide-core` is a standard-library-only state machine. It has no platform imports, system calls, key codes or unsafe code. Platform hosts feed semantic `Event` values plus configuration and an explicit monotonic `Instant`; the core returns semantic `Effect` values. Focus-before-input sequencing, focus-return policy, generations and rollback live in the core. Only tests call `Instant::now()` inside the core crate.
 
 `tabglide-config` depends on core, serde, toml and thiserror. It validates configuration and derives `CoreConfig`; callers supply file paths. It does not discover OS directories and forbids unsafe code. Defaults live in Rust and exclusive file creation preserves existing user data, including invalid files.
 
-`tabglide-platform-windows` depends on core/config and owns Win32, all unsafe code, process/window lookup, input injection, shell UI, diagnostics, configuration paths and lifecycle. Its native dependencies (`windows`, tracing and tracing-subscriber) are target-specific. Its private `WindowOperations` seam permits deterministic executor tests; it is not a cross-platform interface. No shared platform trait exists.
+`tabglide-platform-windows` depends on core/config and is a Windows adapter/host: it owns Win32, all unsafe code, process/window lookup, input injection, shell UI, diagnostics, configuration paths and lifecycle. Its private `WindowOperations` seam tests Win32 effect execution only; it contains no cross-platform product sequencing and is not a shared platform interface. Native dependencies (`windows`, tracing and tracing-subscriber`) are target-specific. No shared platform trait exists.
 
 The safe Windows application entry point references only the Windows crate under `cfg(windows)`. The two other backend crates have no dependencies and no working backends. Consequently neither macOS nor Linux adds dependencies or code to the Windows application. `cargo tree -p tabglide-windows --target x86_64-pc-windows-msvc` shows the actual graph; Cargo.lock fixes resolved versions. No Tokio, async runtime, web UI, IPC framework or event bus is used.
 
@@ -16,19 +16,20 @@ flowchart LR
     Hook -->|always| Next[CallNextHookEx]
     Hook -->|bounded try_send + event| Owner[Application thread]
     Owner --> Context[Window and monitor adapter]
-    Context --> Core[Pure core decision]
-    Core --> Command[SwitchTab or RestoreFocus]
-    Command --> Executor[Validated Windows executor]
+    Context --> Core[Pure Rust state machine]
+    Core --> Effect[Semantic effect]
+    Effect --> Adapter[Windows adapter]
+    Adapter -->|Focus/Input result event| Core
     Tray[Native tray messages] --> Owner
 ```
 
-## Refocus state and executor results
+## Core sequencing and refocus state
 
 `RefocusState` is Idle or Pending with the first original window, deadline and generation. Every eligible wheel extends that deadline and advances the generation, even if the target is already focused. Unsupported applications/out-of-region events do not extend it. Timers must match both generation and deadline. Disable and successful reload invalidate pending state. Time is passed into the core, never read there.
 
-Commands describe complete operations, not arrays of primitive focus/key actions. A switch validates identity, activates only when needed, confirms the actual foreground window, and sends keys only on success. The caller restores the previous core state if the target is invalid or activation is rejected, retaining any older valid return. An input failure after successful activation retains the return, because focus already moved.
+An unfocused wheel event first produces `Effect::RequestFocus`. The adapter reports `Event::FocusResult`; only a confirmed result lets the core emit `Effect::SendTab`. Rejected, invalid or unconfirmed focus rolls back the tentative refocus update inside the core. Tab-input results are also fed back so races such as a lost foreground window are resolved by product policy rather than by a Windows-only executor. An input failure after confirmed focus keeps the return, because focus already moved.
 
-Focus return is process-agnostic: any still-valid original top-level window can be restored, including Windows Explorer. The core and executor therefore have no Explorer-specific return suppression.
+The platform host only schedules the deadline exposed by `AppState::pending_refocus`; expiration is fed back as `Event::RefocusTimerElapsed`, and the core decides whether `Effect::RestoreFocus` is still valid. Focus return is process-agnostic: any still-valid original top-level window can be restored, including Windows Explorer.
 
 ## Hook, queue, wakeups and shutdown
 
@@ -65,4 +66,4 @@ Native menus/dialogs temporarily block consumption; the hook still forwards whee
 - Linux X11: `X11Backend` is an uninhabited placeholder. Future XInput2, EWMH and XTest integration.
 - Linux Wayland: `WaylandBackend` is an uninhabited placeholder. Global observation, enumeration, focus and injection depend on compositor/portal capabilities; unrestricted equivalents cannot be assumed.
 
-Platform adapters should eventually provide the same semantic inputs/commands without changing the core. A shared backend interface should be extracted only after multiple real implementations justify it.
+Platform adapters provide semantic events to the core and execute semantic effects without reimplementing product sequencing. Windows is currently still a Rust adapter/host; this boundary is intentionally suitable for replacing the Windows shell/UI with C# later without moving policy out of the Rust core. Linux can implement the same protocol in Rust and macOS in its native stack. A shared Rust backend trait should be extracted only after multiple real backends justify it.

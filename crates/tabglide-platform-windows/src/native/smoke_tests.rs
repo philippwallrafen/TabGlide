@@ -1,9 +1,9 @@
 //! Opt-in interactive smoke test using only windows owned by this test process.
 //! Run on an unlocked desktop with no keys held; cursor/focus are restored on exit.
 use super::*;
-use crate::executor::WindowOperations;
+use crate::adapter::WindowOperations;
 use std::cell::RefCell;
-use tabglide_core::{Command, TabDirection};
+use tabglide_core::{Effect, RequestId, TabDirection};
 use windows::{
     Win32::{System::LibraryLoader::GetModuleHandleW, UI::Input::KeyboardAndMouse::*},
     core::{PCWSTR, w},
@@ -206,24 +206,34 @@ fn real_hook_passthrough_context_keys_focus_and_shutdown() {
     assert_eq!(event.delta, 120);
     assert_eq!(event.point.x, 120);
     assert_eq!(event.point.y, 20);
-    for direction in [TabDirection::Next, TabDirection::Previous] {
+    assert_eq!(
+        execute(
+            Effect::RequestFocus {
+                request_id: RequestId(1),
+                window: second_id,
+            },
+            &mut windows,
+        )
+        .outcome,
+        Outcome::Completed
+    );
+    for (index, direction) in [TabDirection::Next, TabDirection::Previous]
+        .into_iter()
+        .enumerate()
+    {
         assert_eq!(
             execute(
-                Command::SwitchTab {
+                Effect::SendTab {
+                    request_id: RequestId(index as u64 + 2),
                     target_window: second_id,
                     direction,
-                    restore_focus: None
                 },
-                &mut windows
-            ),
+                &mut windows,
+            )
+            .outcome,
             Outcome::Completed
         );
-        let expected_count = if direction == TabDirection::Next {
-            1
-        } else {
-            2
-        };
-        pump_until(|| second.observed.borrow().tabs.len() == expected_count);
+        pump_until(|| second.observed.borrow().tabs.len() == index + 1);
     }
     assert_eq!(
         second.observed.borrow().tabs,
@@ -232,12 +242,13 @@ fn real_hook_passthrough_context_keys_focus_and_shutdown() {
     assert_eq!(windows.foreground(), Some(second_id));
     assert_eq!(
         execute(
-            Command::RestoreFocus {
+            Effect::RestoreFocus {
                 window: first_id,
-                generation: 1
+                generation: 1,
             },
-            &mut windows
-        ),
+            &mut windows,
+        )
+        .outcome,
         Outcome::Completed
     );
     assert_eq!(windows.foreground(), Some(first_id));

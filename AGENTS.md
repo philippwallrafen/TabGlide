@@ -2,6 +2,7 @@
 
 - Preserve established user behavior unless a change is explicitly documented.
 - `tabglide-core` must remain completely OS-independent.
+- Product sequencing and policy belong in `tabglide-core`; platform code should translate native state to core events and execute semantic core effects.
 - Windows is currently implemented; macOS/Linux remain platform stubs.
 - Do not introduce a shared platform trait until multiple real backends justify it.
 - Keep unsafe code inside platform-specific crates.

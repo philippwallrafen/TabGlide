@@ -1,9 +1,9 @@
-use crate::executor::{Outcome, execute};
+use crate::adapter::{Outcome, execute};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use tabglide_core::{AppState, InputEvent, RefocusState, WheelDirection, process_event};
+use tabglide_core::{AppState, CoreConfig, Event, WheelDirection, process_event};
 use windows::{
     Win32::{Foundation::*, System::Threading::*, UI::WindowsAndMessaging::*},
     core::w,
@@ -56,6 +56,33 @@ fn user_path(variable: &str) -> Result<PathBuf> {
         return Err(format!("{variable} must be an absolute path").into());
     }
     Ok(path.join("TabGlide"))
+}
+
+fn drive_core_event(
+    initial_event: Event,
+    initial_now: Instant,
+    core_config: &CoreConfig,
+    state: &mut AppState,
+    windows: &mut window::NativeWindows,
+    wheel_timestamp: Option<u32>,
+) {
+    let mut event = Some(initial_event);
+    let mut now = initial_now;
+    while let Some(current_event) = event.take() {
+        let Some(effect) = process_event(current_event, core_config, state, now) else {
+            break;
+        };
+        let execution = execute(effect, windows);
+        if execution.outcome != Outcome::Completed {
+            tracing::warn!(
+                ?execution.outcome,
+                ?wheel_timestamp,
+                "Platform adapter effect did not complete"
+            );
+        }
+        event = execution.feedback;
+        now = Instant::now();
+    }
 }
 
 fn run_application() -> Result<()> {
@@ -156,43 +183,29 @@ fn run_application() -> Result<()> {
             } else {
                 WheelDirection::Down
             };
-            let previous_state = state;
-            if let Some(command) = process_event(
-                InputEvent::Wheel { direction },
-                Some(&context),
+            drive_core_event(
+                Event::Wheel { direction, context },
+                now,
                 &core_config,
                 &mut state,
-                now,
-            ) {
-                let outcome = execute(command, &mut windows);
-                if matches!(outcome, Outcome::InvalidWindow | Outcome::FocusDenied) {
-                    state = previous_state;
-                }
-                if outcome != Outcome::Completed {
-                    tracing::warn!(
-                        ?outcome,
-                        wheel_timestamp = event.timestamp,
-                        "Tab switch failed"
-                    );
-                }
-            }
+                &mut windows,
+                Some(event.timestamp),
+            );
         }
         let now = Instant::now();
-        if let RefocusState::Pending(pending) = state.refocus
-            && let Some(command) = process_event(
-                InputEvent::RefocusTimerElapsed {
+        if let Some(pending) = state.pending_refocus()
+            && now >= pending.deadline
+        {
+            drive_core_event(
+                Event::RefocusTimerElapsed {
                     generation: pending.generation,
                 },
-                None,
+                now,
                 &core_config,
                 &mut state,
-                now,
-            )
-        {
-            let outcome = execute(command, &mut windows);
-            if outcome != Outcome::Completed {
-                tracing::debug!(?outcome, "Focus return skipped or denied");
-            }
+                &mut windows,
+                None,
+            );
         }
         if hook.finished() {
             return Err("Mouse hook thread stopped unexpectedly".into());
@@ -200,15 +213,14 @@ fn run_application() -> Result<()> {
         // If a bounded batch left work, re-signal. The auto-reset event eliminates reset/drain races.
         // Always re-signal after a full batch via the receiver-independent producer counter.
         hook.wake_if_pending();
-        let timeout = match state.refocus {
-            RefocusState::Idle => INFINITE,
-            RefocusState::Pending(pending) => pending
+        let timeout = state.pending_refocus().map_or(INFINITE, |pending| {
+            pending
                 .deadline
                 .saturating_duration_since(Instant::now())
                 .as_millis()
                 .saturating_add(1)
-                .min(u32::MAX as u128 - 1) as u32,
-        };
+                .min(u32::MAX as u128 - 1) as u32
+        });
         // SAFETY: wake event remains alive until the hook has joined; blocks until input/UI/deadline.
         let result = unsafe {
             MsgWaitForMultipleObjectsEx(

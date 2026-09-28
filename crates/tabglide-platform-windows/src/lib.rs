@@ -1,6 +1,6 @@
-//! Windows input, execution and native shell integration.
+//! Windows adapter and native shell integration.
 #[cfg(any(windows, test))]
-mod executor;
+mod adapter;
 
 #[cfg(windows)]
 mod native;

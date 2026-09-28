@@ -19,7 +19,7 @@ Source of truth: `legacy/ahk/TabGlide.ahk`, preserved from `src/TabGlide.ahk`.
 | Configuration | Compiled AHK creates INI next to EXE and opens it | TOML in roaming app data; Settings opens it in Notepad; explicit Reload Config |
 | Diagnostics | Optional file logging and F12 GUI | Optional local-app-data logs and tray diagnostics; no global F12 binding |
 
-New safety behavior: failed or still-unconfirmed activation sends no keys; an accepted-but-delayed activation retains the pending focus-return state so the original window is not forgotten; disabled/reloaded configuration cancels pending focus return; stale queued wheel events are discarded. Modified wheel gestures are skipped before focus mutation, with an additional modifier check at injection. No automatic elevation. See architecture and README for limitations and validation status.
+New safety behavior: the core itself requires confirmed focus before it requests tab input; rejected, invalid or still-unconfirmed activation sends no keys and rolls back tentative return state. After confirmed focus, input failure retains the pending focus return because focus already moved. Disabled/reloaded configuration cancels pending focus return; stale queued wheel events are discarded. Modified wheel gestures are skipped before focus mutation, with an additional modifier check at injection. No automatic elevation. See architecture and README for limitations and validation status.
 
 ## Dependency plan (before implementation)
 

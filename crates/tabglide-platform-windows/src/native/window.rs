@@ -1,5 +1,5 @@
 use super::OwnedHandle;
-use crate::executor::WindowOperations;
+use crate::adapter::WindowOperations;
 use std::time::{Duration, Instant};
 use tabglide_core::{ApplicationId, TabDirection, WindowContext, WindowId};
 use windows::{
@@ -101,7 +101,7 @@ impl WindowOperations for NativeWindows {
         identity(unsafe { GetForegroundWindow() })
     }
     fn activate(&mut self, window: WindowId) -> bool {
-        // SAFETY: executor validated window; Win32 tolerates destruction between check and call.
+        // SAFETY: adapter validated window; Win32 tolerates destruction between check and call.
         unsafe { SetForegroundWindow(handle(window)).as_bool() }
     }
     fn wait_for_foreground(&self, window: WindowId, timeout: Duration) -> bool {
