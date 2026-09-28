@@ -28,6 +28,56 @@ impl Drop for OwnedHandle {
     }
 }
 
+struct InstanceGuard {
+    mutex: OwnedHandle,
+    replace: OwnedHandle,
+}
+impl InstanceGuard {
+    fn acquire() -> Result<Self> {
+        // SAFETY: named kernel objects use default security. The first process owns the mutex;
+        // later launches signal the replacement event and wait until ownership transfers.
+        unsafe {
+            let mutex = OwnedHandle(CreateMutexW(
+                None,
+                true,
+                w!("Local\\TabGlide.Rust.Instance"),
+            )?);
+            let already_running = GetLastError() == ERROR_ALREADY_EXISTS;
+            let replace = OwnedHandle(CreateEventW(
+                None,
+                false,
+                false,
+                w!("Local\\TabGlide.Rust.Replace"),
+            )?);
+
+            if already_running {
+                SetEvent(replace.0)?;
+                let wait = WaitForSingleObject(mutex.0, 5000);
+                if wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED {
+                    return Err("Previous TabGlide instance did not exit within five seconds".into());
+                }
+            }
+
+            // A replacement signal can remain pending if the previous process was already
+            // shutting down. Never let the new instance consume its own stale signal.
+            ResetEvent(replace.0)?;
+            Ok(Self { mutex, replace })
+        }
+    }
+
+    fn replacement_handle(&self) -> HANDLE {
+        self.replace.0
+    }
+}
+impl Drop for InstanceGuard {
+    fn drop(&mut self) {
+        // SAFETY: acquire() returns only after this thread owns the named mutex.
+        unsafe {
+            let _ = ReleaseMutex(self.mutex.0);
+        }
+    }
+}
+
 pub(super) fn wide(text: &std::ffi::OsStr) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
     text.encode_wide().chain(Some(0)).collect()
@@ -86,18 +136,7 @@ fn drive_core_event(
 }
 
 fn run_application() -> Result<()> {
-    // SAFETY: constant terminated name, no custom security attributes; retained until shutdown.
-    let instance = unsafe {
-        OwnedHandle(CreateMutexW(
-            None,
-            false,
-            w!("Local\\TabGlide.Rust.Instance"),
-        )?)
-    };
-    // SAFETY: inspect last error immediately after CreateMutexW, before any other Win32 call.
-    if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
-        return Ok(());
-    }
+    let instance = InstanceGuard::acquire()?;
     let config_path = user_path("APPDATA")?.join("config.toml");
     let logs_path = user_path("LOCALAPPDATA")?.join("logs");
     let mut config = tabglide_config::load_or_create(&config_path)?;
@@ -221,10 +260,11 @@ fn run_application() -> Result<()> {
                 .saturating_add(1)
                 .min(u32::MAX as u128 - 1) as u32
         });
-        // SAFETY: wake event remains alive until the hook has joined; blocks until input/UI/deadline.
+        // SAFETY: replacement and wake handles remain live until shutdown; blocks until
+        // replacement, input, UI, or the refocus deadline.
         let result = unsafe {
             MsgWaitForMultipleObjectsEx(
-                Some(&[hook.wake_handle()]),
+                Some(&[instance.replacement_handle(), hook.wake_handle()]),
                 timeout,
                 QS_ALLINPUT,
                 MWMO_INPUTAVAILABLE,
@@ -232,6 +272,10 @@ fn run_application() -> Result<()> {
         };
         if result == WAIT_FAILED {
             return Err(windows::core::Error::from_thread().into());
+        }
+        if result == WAIT_OBJECT_0 {
+            tracing::info!("Replacement instance requested shutdown");
+            break 'application;
         }
     }
     tracing::info!("TabGlide shutting down");

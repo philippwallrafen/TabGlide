@@ -37,7 +37,7 @@ These checks remain unverified unless a result is explicitly recorded:
 - Allowlist rejection, pixel 50 inclusive and pixel 51 excluded, multiple monitors with negative origins and mixed DPI.
 - Modified wheel gestures, denied foreground activation and an elevated target (no automatic elevation or input to an unrelated window).
 - Enable/Disable, Settings, invalid/valid Reload Config, logging on/off, Diagnostics and Exit; Explorer restart restores the tray icon.
-- First-run config creation, second-instance no-op, idle operation and shutdown; no persistent modifier keys after input errors.
+- First-run config creation, second-instance replacement/handoff, idle operation and shutdown; no persistent modifier keys after input errors.
 - Per-user silent install, upgrade while running, autostart selection/deselection, silent uninstall and config/log retention. Back up and uninstall legacy AHK before creating Rust configuration.
 
 The migration plan explicitly permits reporting manually untested runtime behavior. Implementation, tests and documentation must not be presented as proof of those desktop observations.
@@ -63,7 +63,7 @@ The migration plan explicitly permits reporting manually untested runtime behavi
 | No polling, per-event threads or config/UI work in hook | Event wait and callback source, bounded-batch review |
 | Focus success validation, missing windows and input failures | Core/adapter tests plus native validation/SendInput code; real desktop/UIPI cases remain unverified |
 | Focus return including Explorer | `docs/behavior.md`, preserved legacy source for comparison, core multi-target return regression |
-| Single instance, diagnostics, lifecycle and native tray actions | `native/mod.rs`, `logging.rs`, `tray.rs`; logging test and no-instance exit test; other desktop actions remain unverified |
+| Single instance, diagnostics, lifecycle and native tray actions | `native/mod.rs`, `logging.rs`, `tray.rs`; replacement handoff is implemented with a named event/mutex, logging test and no-instance exit test exist; desktop replacement and other tray actions remain unverified |
 | TOML defaults and user config/log locations | Config tests, startup paths, README; no file shipped next to EXE |
 | PerMonitorV2 / standard-user manifest | Extracted release executable manifest |
 | Unsafe confined to platform crate with safety comments | Source inspection and forbid-unsafe in core/config/app/stubs |

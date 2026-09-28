@@ -39,7 +39,7 @@ The sole thread-local callback bridge stores the sender and synchronization hand
 
 The application thread drains at most 64 messages and 64 wheel records per iteration, then checks the pending deadline. It uses `MsgWaitForMultipleObjectsEx` on the queue event and native messages, with INFINITE when idle and a timeout calculated from the pending deadline otherwise. This is a one-shot deadline wait, not periodic polling. A pending-item count re-signals after partial drain; an auto-reset event avoids a reset/drain lost wake. No per-event threads or unbounded queues exist.
 
-Shutdown signals a separate stop event, wakes the hook thread, unhooks and joins it, removes the tray icon and destroys its window, then releases the instance mutex. The hook thread reports termination through an event. The `--exit` utility finds the named application window, posts WM_CLOSE and waits on its process handle with a finite deadline; it never force-kills processes by image name. The session-local mutex keeps only one Rust instance alive. AHK instances must be stopped separately.
+Shutdown signals a separate stop event, wakes the hook thread, unhooks and joins it, removes the tray icon and destroys its window, then releases the instance mutex. The hook thread reports termination through an event. A normal second launch signals a named auto-reset replacement event and waits up to five seconds to acquire the session-local mutex, so the previous instance exits and the new one takes over without image-wide termination. The `--exit` utility still finds the named application window, posts WM_CLOSE and waits on its process handle with a finite deadline. AHK instances must be stopped separately.
 
 ## Windows adapter and input safety
 
@@ -55,7 +55,7 @@ UIPI restricts input injection to equal/lower integrity processes. A standard-us
 
 ## Native shell UI and diagnostics
 
-The tray is isolated from the core in `native/tray.rs`. It uses a hidden top-level Win32 window so Explorer's `TaskbarCreated` broadcast can recreate its icon. The callback translates sent notifications into queued private messages without borrowing mutable application state. Popup menus return command IDs; nested native message loops cannot reenter state mutation. Settings launches native Notepad, and Diagnostics is a native message box. UI opening is not needed for background operation.
+The tray is isolated from the core in `native/tray.rs`. It uses a hidden top-level Win32 window so Explorer's `TaskbarCreated` broadcast can recreate its icon. The callback translates sent notifications into queued private messages without borrowing mutable application state. Popup menus return command IDs; nested native message loops cannot reenter state mutation. Settings launches native Notepad, and Diagnostics is currently a native message box. This is a temporary parity gap: the legacy live diagnostics/debug GUI is intended to return in the planned C# Windows UI, while the Rust core remains responsible for product state and sequencing. UI opening is not needed for background operation.
 
 Native menus/dialogs temporarily block consumption; the hook still forwards wheel events and bounded storage limits backlog. On returning from UI, captured events are discarded. Startup config errors are shown and cause failure; reload errors preserve the running configuration. Logging is optional, reloadable, and capped by rotating two approximately 2 MiB files. No log/config work occurs in the hook.
 

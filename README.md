@@ -15,7 +15,7 @@ Hover over an allowed application's window within the first 50 physical pixels f
 
 TabGlide activates an unfocused target before sending the shortcut. By default it returns focus to the original window 700 ms after the last eligible scroll. Further eligible scrolls preserve the first original window and restart the delay. The Rust version returns to any still-valid original window, including Windows Explorer; Explorer itself also remains an allowed tab-switching target on systems with Explorer tabs.
 
-Use the notification-area icon for **Enable/Disable**, **Settings**, **Reload Config**, **Diagnostics**, or **Exit**. Settings opens the TOML file in Notepad; save it, then choose Reload Config. A bad reload leaves the last valid configuration active and displays the error. Disable and successful reload cancel pending focus return. Another launch leaves the existing instance running. `TabGlide.exe --exit` requests graceful shutdown and waits up to five seconds.
+Use the notification-area icon for **Enable/Disable**, **Settings**, **Reload Config**, **Diagnostics**, or **Exit**. Settings opens the TOML file in Notepad; save it, then choose Reload Config. A bad reload leaves the last valid configuration active and displays the error. Disable and successful reload cancel pending focus return. Another launch replaces the existing instance: it requests a graceful shutdown, waits up to five seconds, then continues as the new instance. `TabGlide.exe --exit` only requests shutdown and exits.
 
 ## Installation and AHK migration
 
@@ -52,16 +52,16 @@ focus_return_delay_ms = 700
 
 [windows]
 allowed_applications = [
-  "brave.exe", "chrome.exe", "chromium.exe", "explorer.exe",
-  "firefox.exe", "msedge.exe", "opera.exe", "opera_gx.exe",
-  "WindowsTerminal.exe"
+  "brave.exe", "chrome.exe", "chromium.exe", "Code.exe",
+  "explorer.exe", "firefox.exe", "msedge.exe", "opera.exe",
+  "opera_gx.exe", "WindowsTerminal.exe"
 ]
 
 [diagnostics]
 logging = false
 ```
 
-Application names are case-insensitive executable basenames. An empty list disables all targets. Height accepts 0–10000 pixels; delay accepts 0–60000 ms. Set `focus_unfocused_window = false` to switch only the currently focused window. Logs rotate at about 2 MiB, retaining the current and previous file. The tray Diagnostics dialog shows paths, enable/logging state and queue-overflow count; no global F12 shortcut is registered.
+Application names are case-insensitive executable basenames. VS Code (`Code.exe`) is included in newly created default configurations. Existing configuration files remain authoritative and are not rewritten automatically. An empty list disables all targets. Height accepts 0–10000 pixels; delay accepts 0–60000 ms. Set `focus_unfocused_window = false` to switch only the currently focused window. Logs rotate at about 2 MiB, retaining the current and previous file. The current tray Diagnostics dialog shows paths, enable/logging state and queue-overflow count. The legacy live Debug GUI/F12 view is a known parity gap and is planned to return in the C# Windows UI rather than being reimplemented in the temporary Rust tray.
 
 ## Limitations and intentional changes
 
@@ -70,7 +70,7 @@ Application names are case-insensitive executable basenames. An empty list disab
 - Ctrl/Shift/Alt/Windows-modified wheel gestures are skipped to preserve physical key state; the original wheel still passes through. AHK's implicit modifier rewriting is not reproduced.
 - Queue overflow and wheel events older than 250 ms are dropped rather than replayed late. Native menus/dialogs pause the consumer; events captured during them are discarded on return. The hook continues forwarding all original wheel input.
 - Window identity includes the native handle plus process/thread IDs. Reuse of all three identifiers remains a rare limitation; destroyed windows and ordinary handle reuse are rejected.
-- Single-instance behavior keeps the existing process instead of AHK's forced replacement. Config is TOML, diagnostics are tray/log based, and invalid monitor lookups are ignored. See the complete [behavior matrix](docs/behavior.md).
+- Single-instance launch behavior again replaces the previous instance, matching AHK's user-visible behavior while using a graceful handoff instead of terminating by image name. Config is TOML, diagnostics are currently tray/log based, and invalid monitor lookups are ignored. See the complete [behavior matrix](docs/behavior.md).
 
 ## Build and validation
 

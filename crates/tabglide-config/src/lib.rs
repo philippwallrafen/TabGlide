@@ -46,6 +46,7 @@ impl Default for WindowsConfig {
                 "brave.exe",
                 "chrome.exe",
                 "chromium.exe",
+                "Code.exe",
                 "explorer.exe",
                 "firefox.exe",
                 "msedge.exe",
@@ -163,7 +164,14 @@ mod tests {
     #[test]
     fn defaults_roundtrip_and_partial_configuration() {
         let config = Config::parse("").unwrap();
-        assert_eq!(config.windows.allowed_applications.len(), 9);
+        assert_eq!(config.windows.allowed_applications.len(), 10);
+        assert!(
+            config
+                .windows
+                .allowed_applications
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case("Code.exe"))
+        );
         assert_eq!(config.focus_return_delay_ms, 700);
         let text = toml::to_string_pretty(&config).unwrap();
         assert_eq!(Config::parse(&text).unwrap().activation_region_height, 50);
