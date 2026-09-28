@@ -35,7 +35,7 @@ pub enum TabDirection {
     Next,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WindowContext {
     pub hovered_window: WindowId,
     pub focused_window: Option<WindowId>,
@@ -454,7 +454,7 @@ mod tests {
                 panic!("expected tab effect")
             };
             assert_eq!(direction, expected);
-            process_event(
+            let _ = process_event(
                 Event::TabInputResult {
                     request_id,
                     outcome: TabInputOutcome::Sent,
@@ -587,7 +587,7 @@ mod tests {
         else {
             panic!()
         };
-        process_event(
+        let _ = process_event(
             Event::TabInputResult {
                 request_id,
                 outcome: TabInputOutcome::Sent,
