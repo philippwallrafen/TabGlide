@@ -1,0 +1,21 @@
+[package]
+name = "tabglide-platform-windows"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tabglide-core.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+tabglide-config.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security",
+    "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_System_ProcessStatus",
+    "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell",
+] }
+
+[lints]
+workspace = true

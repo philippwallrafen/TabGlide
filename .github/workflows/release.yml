@@ -1,0 +1,44 @@
+name: Windows release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install stable toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Validate version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '^v(\d+\.\d+\.\d+)$') { throw 'Expected vX.Y.Z tag' }
+          $version = $Matches[1]
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = $metadata.packages | Where-Object name -eq 'tabglide-windows'
+          if ($package.version -ne $version) { throw 'Tag and Cargo version differ' }
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --workspace
+      - run: cargo build --locked --release
+      - name: Build installer and checksum
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:APP_VERSION" installer/TabGlideExe.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Get-Item "build/TabGlide-$env:APP_VERSION-windows-x64-setup.exe"
+          $hash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content -Encoding ascii build/SHA256SUMS.txt
+      - name: Publish tagged artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME "build/TabGlide-$env:APP_VERSION-windows-x64-setup.exe" build/SHA256SUMS.txt --verify-tag --generate-notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

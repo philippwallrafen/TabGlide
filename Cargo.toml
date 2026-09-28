@@ -1,0 +1,35 @@
+[workspace]
+members = [
+    "crates/tabglide-core",
+    "crates/tabglide-config",
+    "crates/tabglide-platform-windows",
+    "crates/tabglide-platform-macos",
+    "crates/tabglide-platform-linux",
+    "apps/tabglide-windows",
+]
+resolver = "2"
+
+[workspace.package]
+version = "1.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+repository = "https://github.com/philippwallrafen/TabGlide"
+
+[workspace.dependencies]
+tabglide-core = { path = "crates/tabglide-core" }
+tabglide-config = { path = "crates/tabglide-config" }
+tabglide-platform-windows = { path = "crates/tabglide-platform-windows" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "registry"] }
+windows = "0.62"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

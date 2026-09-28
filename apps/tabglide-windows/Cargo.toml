@@ -1,0 +1,16 @@
+[package]
+name = "tabglide-windows"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "TabGlide"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+tabglide-platform-windows.workspace = true
+
+[lints]
+workspace = true
