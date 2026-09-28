@@ -1,11 +1,15 @@
 //! A private execution seam, not a shared cross-platform backend abstraction.
+use std::time::Duration;
 use tabglide_core::{Command, TabDirection, WindowId};
+
+const FOREGROUND_CONFIRMATION_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub(crate) trait WindowOperations {
     fn is_valid(&self, window: WindowId) -> bool;
     fn can_restore(&self, window: WindowId) -> bool;
     fn foreground(&self) -> Option<WindowId>;
-    fn activate(&mut self, window: WindowId);
+    fn activate(&mut self, window: WindowId) -> bool;
+    fn wait_for_foreground(&self, window: WindowId, timeout: Duration) -> bool;
     fn send_tab(&mut self, direction: TabDirection) -> bool;
 }
 
@@ -14,6 +18,7 @@ pub(crate) enum Outcome {
     Completed,
     InvalidWindow,
     FocusDenied,
+    FocusUnconfirmed,
     InputFailed,
     RestoreSuppressed,
 }
@@ -30,10 +35,24 @@ pub(crate) fn execute(command: Command, windows: &mut impl WindowOperations) -> 
         return Outcome::RestoreSuppressed;
     }
     if windows.foreground() != Some(target) {
-        windows.activate(target);
+        if !windows.activate(target) {
+            return Outcome::FocusDenied;
+        }
+        // SetForegroundWindow can be accepted before GetForegroundWindow observes the change.
+        // Confirm the transition for a short bounded interval before injecting Ctrl+Tab.
+        if !windows.wait_for_foreground(target, FOREGROUND_CONFIRMATION_TIMEOUT) {
+            return if windows.is_valid(target) {
+                Outcome::FocusUnconfirmed
+            } else {
+                Outcome::InvalidWindow
+            };
+        }
     }
-    if !windows.is_valid(target) || windows.foreground() != Some(target) {
-        return Outcome::FocusDenied;
+    if !windows.is_valid(target) {
+        return Outcome::InvalidWindow;
+    }
+    if windows.foreground() != Some(target) {
+        return Outcome::FocusUnconfirmed;
     }
     if let Command::SwitchTab { direction, .. } = command
         && !windows.send_tab(direction)
@@ -52,7 +71,8 @@ mod tests {
         vanish_on_activation: bool,
         excluded_original: Option<WindowId>,
         focused: Option<WindowId>,
-        allow_focus: bool,
+        activation_accepted: bool,
+        confirm_foreground: bool,
         input_succeeds: bool,
         activations: u32,
         sent: Vec<TabDirection>,
@@ -64,7 +84,8 @@ mod tests {
                 vanish_on_activation: false,
                 excluded_original: None,
                 focused: None,
-                allow_focus: true,
+                activation_accepted: true,
+                confirm_foreground: true,
                 input_succeeds: true,
                 activations: 0,
                 sent: vec![],
@@ -81,14 +102,18 @@ mod tests {
         fn can_restore(&self, window: WindowId) -> bool {
             self.excluded_original != Some(window)
         }
-        fn activate(&mut self, target: WindowId) {
+        fn activate(&mut self, target: WindowId) -> bool {
             self.activations += 1;
             if self.vanish_on_activation {
                 self.valid = false;
             }
-            if self.allow_focus {
+            if self.activation_accepted && self.confirm_foreground {
                 self.focused = Some(target);
             }
+            self.activation_accepted
+        }
+        fn wait_for_foreground(&self, window: WindowId, _: Duration) -> bool {
+            self.focused == Some(window)
         }
         fn send_tab(&mut self, direction: TabDirection) -> bool {
             self.sent.push(direction);
@@ -122,12 +147,23 @@ mod tests {
     #[test]
     fn denied_focus_never_sends_input() {
         let mut windows = FakeWindows {
-            allow_focus: false,
+            activation_accepted: false,
             ..Default::default()
         };
         assert_eq!(execute(switch(), &mut windows), Outcome::FocusDenied);
         assert!(windows.sent.is_empty());
     }
+    #[test]
+    fn accepted_activation_without_confirmation_never_sends_input() {
+        let mut windows = FakeWindows {
+            confirm_foreground: false,
+            ..Default::default()
+        };
+        assert_eq!(execute(switch(), &mut windows), Outcome::FocusUnconfirmed);
+        assert_eq!(windows.activations, 1);
+        assert!(windows.sent.is_empty());
+    }
+
     #[test]
     fn vanished_window_is_not_restored() {
         let mut windows = FakeWindows {
@@ -161,7 +197,7 @@ mod tests {
             vanish_on_activation: true,
             ..Default::default()
         };
-        assert_eq!(execute(switch(), &mut windows), Outcome::FocusDenied);
+        assert_eq!(execute(switch(), &mut windows), Outcome::InvalidWindow);
         assert!(windows.sent.is_empty());
     }
 

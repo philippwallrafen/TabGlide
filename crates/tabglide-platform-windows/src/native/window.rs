@@ -1,5 +1,6 @@
 use super::OwnedHandle;
 use crate::executor::WindowOperations;
+use std::time::{Duration, Instant};
 use tabglide_core::{ApplicationId, TabDirection, WindowContext, WindowId};
 use windows::{
     Win32::{
@@ -102,10 +103,22 @@ impl WindowOperations for NativeWindows {
         // SAFETY: getter takes no pointers and returns a borrowed handle, validated by identity.
         identity(unsafe { GetForegroundWindow() })
     }
-    fn activate(&mut self, window: WindowId) {
+    fn activate(&mut self, window: WindowId) -> bool {
         // SAFETY: executor validated window; Win32 tolerates destruction between check and call.
-        unsafe {
-            let _ = SetForegroundWindow(handle(window));
+        unsafe { SetForegroundWindow(handle(window)).as_bool() }
+    }
+    fn wait_for_foreground(&self, window: WindowId, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if self.foreground() == Some(window) {
+                return true;
+            }
+            if !self.is_valid(window) || Instant::now() >= deadline {
+                return false;
+            }
+            // This is a bounded confirmation wait only after a requested focus transition, not
+            // background polling. Yielding avoids burning CPU while Windows completes activation.
+            std::thread::sleep(Duration::from_millis(1));
         }
     }
     fn send_tab(&mut self, direction: TabDirection) -> bool {
