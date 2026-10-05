@@ -11,7 +11,7 @@ on:
 jobs:
   main:
     name: Validate PR title
-    runs-on: ${{ vars.LINUX_SERVER }}
+    runs-on: ${{ github.event.repository.visibility == 'public' && 'ubuntu-latest' || vars.LINUX_SERVER }}
     permissions:
       pull-requests: read
     steps:
