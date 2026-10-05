@@ -13,7 +13,7 @@ permissions: {}
 jobs:
   valid-pr-title:
     name: valid-pr-title
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.LINUX_SERVER }}
 
     steps:
       - name: Validate PR title
