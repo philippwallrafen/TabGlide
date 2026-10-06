@@ -1,4 +1,4 @@
-name: 'Lint PR'
+name: lint-pr
 
 on:
   pull_request_target:
@@ -9,8 +9,8 @@ on:
       - synchronize
 
 jobs:
-  main:
-    name: Validate PR title
+  validate-pr-title:
+    name: validate-pr-title
     runs-on: ${{ github.event.repository.visibility == 'public' && 'ubuntu-latest' || vars.LINUX_SERVER }}
     permissions:
       pull-requests: read
